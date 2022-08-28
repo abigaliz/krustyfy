@@ -1,15 +1,13 @@
-use std::{error::Error, future::pending};
+use std::{error::Error};
 use async_std::channel::Sender;
 use notification::Notification;
-use notification_widget::notifications::NotificationWidget;
 use notification_spawner::NotificationSpawner;
 use qt_core::{QTimer, SlotNoArgs};
 use qt_widgets::QApplication;
-use signals2::{Signal, Emit7, Connect7};
-use zbus::{ConnectionBuilder, dbus_interface, MessageBuilder, Message, MessageField, zvariant::Array};
+use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use zvariant::{Value, Signature};
+use zvariant::{Value};
 mod notification_widget;
 mod notification_spawner;
 mod notification;
@@ -19,7 +17,6 @@ mod image_handler;
 struct NotificationHandler {
     count: u64,
     sender: Sender<Notification>,
-    //callback: fn(String, u32, String, String, String, Vec<String>, HashMap<String, Value<'_>>, i32),
 }
 
 #[dbus_interface(name = "org.freedesktop.Notifications")]
@@ -44,12 +41,12 @@ impl NotificationHandler {
         
             let image_data = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap().clone();
 
-            let mut image_raw_bytes = image_data.fields()[6].clone();
-            let mut image_raw_alpha = image_data.fields()[3].clone();
+            let image_raw_bytes = image_data.fields()[6].clone();
+            let image_raw_alpha = image_data.fields()[3].clone();
 
-            let mut image_raw_bytes_array = Array::try_from(image_raw_bytes).ok().unwrap().get().to_vec();
+            let image_raw_bytes_array = Array::try_from(image_raw_bytes).ok().unwrap().get().to_vec();
 
-            let pusher = (&image_raw_bytes_array).to_owned().into_iter().for_each(|f| {
+            (&image_raw_bytes_array).to_owned().into_iter().for_each(|f| {
                 image.push(u8::try_from(f).ok().unwrap());
             });
 
@@ -94,7 +91,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 
     
-    QApplication::init(|app| unsafe {
+    QApplication::init(|_| unsafe {
 
         let spawner = NotificationSpawner::new();
         
@@ -103,7 +100,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         timer.timeout().connect(&SlotNoArgs::new(&timer, move || {
             let message =  rx.try_recv();
 
-            if (message.is_ok()) {
+            if message.is_ok() {
                 let notification = message.unwrap();
                 spawner.spawn_notification(notification.app_name, notification.replaces_id, notification.app_icon, notification.summary, notification.body, notification.actions, notification.expire_timeout);
             }
@@ -114,8 +111,4 @@ async fn main() -> Result<(), Box<dyn Error>> {
         QApplication::exec()
 
     });
-
-    pending::<()>().await;
-
-    Ok(())
 }
