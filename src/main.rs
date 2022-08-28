@@ -6,12 +6,14 @@ use notification_spawner::NotificationSpawner;
 use qt_core::{QTimer, SlotNoArgs};
 use qt_widgets::QApplication;
 use signals2::{Signal, Emit7, Connect7};
-use zbus::{ConnectionBuilder, dbus_interface, MessageBuilder, Message, MessageField};
+use zbus::{ConnectionBuilder, dbus_interface, MessageBuilder, Message, MessageField, zvariant::Array};
 use std::collections::HashMap;
-use zbus::zvariant::Value;
+use std::convert::TryFrom;
+use zvariant::{Value, Signature};
 mod notification_widget;
 mod notification_spawner;
 mod notification;
+mod image_handler;
 
 //static 
 struct NotificationHandler {
@@ -27,8 +29,54 @@ impl NotificationHandler {
         hints: HashMap<String, Value<'_>>,
         expire_timeout: i32,  ) -> zbus::fdo::Result<u32> {
 
-        let notification = notification::Notification::new(app_name, replaces_id, app_icon, summary, body, actions, expire_timeout);
+        let mut icon: String;
 
+
+        let mut _hints = hints.clone(); // hints.to_owned().clone();
+
+        //_hints.clone_from(hints.to_owned());
+
+        if _hints.contains_key("desktop-entry") {
+            icon = zbus::zvariant::Str::try_from(&_hints["desktop-entry"]).ok().unwrap().to_string();
+        }
+
+        let mut image = Vec::new(); // Array::new(Signature::try_from("(iiibiiay)").unwrap()).get().to_vec();
+
+        let mut image_has_alpha: bool = false;
+
+
+/*         if _hints.contains_key("icon_data") {
+            let image_data = zvariant::Structure::try_from(&_hints["icon_data"]).ok().unwrap();
+
+
+            image = Array::try_from(&image_data.fields()[6]).ok().unwrap();
+            image_has_alpha = bool::try_from(&image_data.fields()[3]).ok().unwrap();
+        } */
+
+        if _hints.contains_key("image-data") {
+
+            let desktop_entry = _hints["image-data"].clone();
+            let image_data1 = zbus::zvariant::Structure::try_from(desktop_entry).ok().unwrap().clone();
+
+            let mut data6 = image_data1.clone().fields().clone()[6].clone();
+            let mut data3 = image_data1.clone().fields().clone()[3].clone();
+
+            let mut ay = Array::try_from(data6).ok().unwrap().get().to_vec();
+
+            let pusher = (&ay).to_owned().into_iter().for_each(|f| {
+                image.push(u8::try_from(f).ok().unwrap());
+            });
+
+            println!("{}", image.len().to_string());
+
+            image_has_alpha = bool::try_from(data3).ok().unwrap();
+        }
+        
+
+        let notification = notification::Notification {
+            app_name, replaces_id, app_icon, summary, body, actions, image_data: image, image_has_alpha, expire_timeout
+        };
+        
         self.sender.send(notification).await;
 
         self.count += 1;

@@ -3,7 +3,7 @@ pub mod notifications {
     use cpp_core::{Ptr, Ref, StaticUpcast, CppBox, NullPtr};
     use qt_core::{qs, slot, ContextMenuPolicy, QBox, QObject, 
         QPoint, SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup,
-        WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString
+        WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString, SignalOfInt
     };
     use qt_gui::{QPixmap, SignalOfQWindow};
     use qt_widgets::{
@@ -49,6 +49,7 @@ pub mod notifications {
         title_label: QBox<QLabel>,
         body_label: QBox<QLabel>,
         close_signal: QBox<SignalOfQString>,
+        pub animate_entry_signal: QBox<SignalOfInt>,
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -199,6 +200,8 @@ pub mod notifications {
                 vertical_body_layout.add_widget(&title_label);
                 vertical_body_layout.add_widget(&body_label);
 
+                let animate_entry_signal = SignalOfInt::new();
+            
                 widget.show();
 
                 let this = Rc::new(Self {
@@ -219,6 +222,7 @@ pub mod notifications {
                     title_label,
                     body_label,
                     close_signal,
+                    animate_entry_signal,
                 });
                 this.init();
                 this.animate_exit();
@@ -275,12 +279,15 @@ pub mod notifications {
         }
 
         unsafe fn init(self: &Rc<Self>) {
+            self.animate_entry_signal.connect(&self.slot_animate_entry());
             //self.entry_animation.finished().connect(&self.slot_animate_exit());
         }
 
         #[slot(SlotNoArgs)]
         unsafe fn on_close(self: &Rc<Self>) {
+            println!("emitting on_close signal for {}", self.widget.win_id().to_string());
             self.close_signal.emit(&qs(self.widget.win_id().to_string()));
+            println!("emitted on_close signal for {}", self.widget.win_id().to_string());
             self.widget.close();
         }
 

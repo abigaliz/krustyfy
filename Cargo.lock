@@ -1197,6 +1197,7 @@ name = "test-helloworld"
 version = "0.1.0"
 dependencies = [
  "async-std",
+ "byteorder",
  "cpp_core",
  "qt_core",
  "qt_gui",
@@ -1204,6 +1205,7 @@ dependencies = [
  "qt_widgets",
  "signals2",
  "zbus",
+ "zvariant",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ use std::{rc::Rc, collections::HashMap, slice::Iter, borrow::Borrow, cell::RefMu
 
 use async_std::channel::Receiver;
 use cpp_core::{CppBox, StaticUpcast, Ptr, };
-use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString};
+use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString, QListOfQObject, ConnectionType};
 use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow};
 use qt_widgets::{QWidget, QDialog, SlotOfQWidgetQWidget};
 use signals2::Connect12;
@@ -44,6 +44,7 @@ impl NotificationSpawner {
             let qobject = QObject::new_0a();
 
             let widget_list = RefCell::new(Vec::new());
+            let qwidget_list = QListOfQObject::new();
             let timer = QTimer::new_0a();
             timer.set_interval(100);
 
@@ -73,50 +74,88 @@ impl NotificationSpawner {
     pub unsafe fn spawn_notification(self: &Rc<Self>, app_name: String, replaces_id: u32, app_icon: String, summary: String, body: String, actions: Vec<String>,
         expire_timeout: i32,) {
 
-        let mut iter = self.iter();
-
         let close_signal = SignalOfQString::new();
 
-        close_signal.connect(&self.slot_on_widget_close());
+        let connection_type = ConnectionType::QueuedConnection;
+
+        let connection = close_signal.connect_with_type(connection_type, &self.slot_on_widget_close());
         
         let _notification_widget = NotificationWidget::new(close_signal);
 
         _notification_widget.set_content(qs(app_name), qs(summary), qs(body));
-        _notification_widget.animate_entry(iter.r.len() as i32);
+        _notification_widget.animate_entry((*self.widget_list.borrow()).len() as i32);
         
+        println!("pushing new widget with id {}", _notification_widget.widget.win_id().to_string());
 
-        iter.r.push(_notification_widget);
-        self.reorder(iter.into_iter().enumerate());
+        (*self.widget_list.borrow_mut()).push(_notification_widget);
+        self.reorder();
     }
 
-    unsafe fn reorder(self : &Rc<Self>, iter: std::iter::Enumerate<std::slice::Iter<'_, Rc<NotificationWidget>>>) {
-        //let iter = self.iter();
+    unsafe fn reorder(self : &Rc<Self>) {
+        let signal = SignalNoArgs::new();
 
-        for (i, widget) in iter {
+        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_reorder());
+
+        println!("Emitting reorder signal");
+        signal.emit();
+    }
+
+    #[slot(SlotNoArgs)]
+    unsafe fn on_reorder(self : &Rc<Self>) {
+        println!("reordering");
+
+        let list = &(*self.widget_list.borrow());
+
+        println!("there are {} items", list.len().to_string());
+
+        if (list.len() == 0) {
+            return;
+        }
+
+        for i in 0..list.len() {
+            println!("looping through item {} ", i.to_string());
+            let widget = &list[i];
+
+            println!("obtained widget {} ", i.to_string());
+
             let topleft = widget.widget.screen().geometry().top_left();
 
+            println!("setting geometry for {}", i.to_string());
+
             widget.widget.set_geometry_4a(topleft.x(), widget.widget.y(), widget.widget.width(), widget.widget.height());
-            widget.animate_entry(i as i32);
+
+            println!("animating entry for {}", i.to_string());
+            widget.animate_entry_signal.emit(i as i32);
+
+            println!("animated entry for {}", i.to_string());
         }
     }
 
     #[slot(SlotOfQString)]
-    unsafe fn on_widget_close(self : &Rc<Self>, closed_widget: cpp_core::Ref<QString>) {
-
-        let mut iter = self.iter();
-
-        let enumerator = iter.into_iter().enumerate();
-        
+    unsafe fn on_widget_close(self : &Rc<Self>, closed_widget: cpp_core::Ref<QString>) {    
         let mut notification_widget_index: usize = 0;
 
-        for (i, widget) in enumerator {
+        println!("trying to close widget {}", closed_widget.to_std_string());
+
+        let list = (*self.widget_list.borrow()).clone();
+
+        println!("cloned list successfully");
+
+        for i in 0..&list.len() - 1 {
+            let widget = &list[i];
             if (widget.widget.win_id().to_string() == closed_widget.to_std_string()) {
                 notification_widget_index = i;
+                break;
             }
         }
 
-        iter.r.remove(notification_widget_index);
-        self.reorder(iter.into_iter().enumerate());
+
+        println!("removing {} - {}", notification_widget_index.to_string(), closed_widget.to_std_string());
+
+        (self.widget_list.borrow_mut()).remove(notification_widget_index);
+
+        println!("successfully removed {} - {}, no panic!", notification_widget_index.to_string(), closed_widget.to_std_string());
+        self.reorder();
     }
 
     pub fn iter(&self) -> VecRefWrapper<Rc<notifications::NotificationWidget>> {
