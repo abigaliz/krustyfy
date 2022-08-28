@@ -31,45 +31,31 @@ impl NotificationHandler {
 
         let mut icon: String;
 
-
-        let mut _hints = hints.clone(); // hints.to_owned().clone();
-
-        //_hints.clone_from(hints.to_owned());
-
-        if _hints.contains_key("desktop-entry") {
-            icon = zbus::zvariant::Str::try_from(&_hints["desktop-entry"]).ok().unwrap().to_string();
+        if hints.contains_key("desktop-entry") {
+            icon = zbus::zvariant::Str::try_from(&hints["desktop-entry"]).ok().unwrap().to_string();
         }
 
-        let mut image = Vec::new(); // Array::new(Signature::try_from("(iiibiiay)").unwrap()).get().to_vec();
+        let mut image = Vec::new();
 
         let mut image_has_alpha: bool = false;
 
 
-/*         if _hints.contains_key("icon_data") {
-            let image_data = zvariant::Structure::try_from(&_hints["icon_data"]).ok().unwrap();
+        if hints.contains_key("image-data") {
+        
+            let image_data = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap().clone();
 
+            let mut image_raw_bytes = image_data.fields()[6].clone();
+            let mut image_raw_alpha = image_data.fields()[3].clone();
 
-            image = Array::try_from(&image_data.fields()[6]).ok().unwrap();
-            image_has_alpha = bool::try_from(&image_data.fields()[3]).ok().unwrap();
-        } */
+            let mut image_raw_bytes_array = Array::try_from(image_raw_bytes).ok().unwrap().get().to_vec();
 
-        if _hints.contains_key("image-data") {
-
-            let desktop_entry = _hints["image-data"].clone();
-            let image_data1 = zbus::zvariant::Structure::try_from(desktop_entry).ok().unwrap().clone();
-
-            let mut data6 = image_data1.clone().fields().clone()[6].clone();
-            let mut data3 = image_data1.clone().fields().clone()[3].clone();
-
-            let mut ay = Array::try_from(data6).ok().unwrap().get().to_vec();
-
-            let pusher = (&ay).to_owned().into_iter().for_each(|f| {
+            let pusher = (&image_raw_bytes_array).to_owned().into_iter().for_each(|f| {
                 image.push(u8::try_from(f).ok().unwrap());
             });
 
             println!("{}", image.len().to_string());
 
-            image_has_alpha = bool::try_from(data3).ok().unwrap();
+            image_has_alpha = bool::try_from(image_raw_alpha).ok().unwrap();
         }
         
 
