@@ -6,10 +6,6 @@ use qt_widgets::QFileIconProvider;
 use crate::notification::ImageData;
 
 pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
-    let s = "HELLO";
-
-    assert_eq!("hello", s.to_lowercase());
-
     let desktop_entry_lowercase = desktop_entry.as_str().to_lowercase();
 
     let qstr = QString::from_std_str(desktop_entry_lowercase.as_str());
