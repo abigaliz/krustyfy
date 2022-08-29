@@ -1,11 +1,10 @@
 use std::{rc::Rc, collections::HashMap, slice::Iter, borrow::Borrow, cell::RefMut};
-
-use async_std::channel::{Receiver, Sender};
 use cpp_core::{CppBox, StaticUpcast, Ptr, };
 use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfInt, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString, QListOfQObject, ConnectionType, SignalOfInt};
 use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow, QPixmap};
 use qt_widgets::{QWidget, QDialog, SlotOfQWidgetQWidget};
 use signals2::Connect12;
+use tokio::sync::mpsc::Sender;
 use zbus::zvariant::Value;
 use std::cell::{RefCell, Ref};
 

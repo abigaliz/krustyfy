@@ -1,5 +1,4 @@
 use std::{error::Error};
-use async_std::{channel::{Sender, Receiver}, task::spawn};
 use notification::{Notification, ImageData};
 use notification_spawner::NotificationSpawner;
 use qt_core::{QTimer, SlotNoArgs};
@@ -8,7 +7,7 @@ use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array, export::futures_u
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use zvariant::{Value};
-use tokio;
+use tokio::{self, sync::mpsc::{Sender, Receiver, self}};
 mod notification_widget;
 mod notification_spawner;
 mod notification;
@@ -89,8 +88,8 @@ impl NotificationHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let (notification_sender, notification_receiver) = async_std::channel::unbounded();
-    let (action_sender, action_receiver) = async_std::channel::unbounded();
+    let (notification_sender, mut notification_receiver) = mpsc::channel(32);
+    let (action_sender, action_receiver) = mpsc::channel(32);
 
     let notification_handler = NotificationHandler { count: 0, sender: notification_sender, receiver: action_receiver};
     let _ = ConnectionBuilder::session()?
