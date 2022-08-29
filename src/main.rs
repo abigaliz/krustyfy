@@ -1,4 +1,4 @@
-use std::{error::Error};
+use std::{error::Error, time::Duration};
 use notification::{Notification, ImageData};
 use notification_spawner::NotificationSpawner;
 use qt_core::{QTimer, SlotNoArgs};
@@ -15,9 +15,8 @@ mod image_handler;
 
 //static 
 struct NotificationHandler {
-    count: u64,
+    count: u32,
     sender: Sender<Notification>,
-    receiver: Receiver<i32>,
 }
 
 #[dbus_interface(name = "org.freedesktop.Notifications")]
@@ -64,14 +63,20 @@ impl NotificationHandler {
         }
         
 
+        let mut notification_id = replaces_id;
+        self.count += 1;
+
+        if notification_id == 0 {
+            notification_id = self.count;
+        }
+
         let notification = notification::Notification {
-            app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout
+            app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout, notification_id
         };
         
         self.sender.send(notification).await;
 
-        self.count += 1;
-        return Ok(0);
+        return Ok(self.count);
     }
 
     #[dbus_interface(out_args("name", "vendor", "version", "spec_version"), name="GetServerInformation")]
@@ -83,16 +88,33 @@ impl NotificationHandler {
 
         Ok((name, vendor, version, specification_version))
     }
+
+    #[dbus_interface(name="GetCapabilities")]
+    fn get_capabilities(&mut self) -> zbus::fdo::Result<(Vec<&str>)> {
+
+        let capabilities = ["action-icons",
+        "actions",
+        "body",
+        "body-hyperlinks",
+        "body-images",
+        "body-markup",
+        "icon-multi",
+        "icon-static",
+        "persistence",
+        "sound"].to_vec();
+
+        Ok(capabilities)
+    }
 }
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let (notification_sender, mut notification_receiver) = mpsc::channel(32);
-    let (action_sender, action_receiver) = mpsc::channel(32);
+    let (action_sender, mut action_receiver) = mpsc::unbounded_channel();
 
-    let notification_handler = NotificationHandler { count: 0, sender: notification_sender, receiver: action_receiver};
-    let _ = ConnectionBuilder::session()?
+    let notification_handler = NotificationHandler { count: 0, sender: notification_sender};
+    let connection = ConnectionBuilder::session()?
         .name("org.freedesktop.Notifications")?
         .serve_at("/org/freedesktop/Notifications", notification_handler)?
         .build()
@@ -103,7 +125,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("GOT = {}", message);
             }
         }); */
-
+    tokio::spawn(async move {
+        while let Some(message) = action_receiver.recv().await {
+            println!("GOT = {}", message);
+            
+            connection.emit_signal(
+                None::<()>, 
+                "/org/freedesktop/Notifications", 
+                "org.freedesktop.Notifications", 
+                "ActionInvoked", 
+                &(message as u32, "default")).await;
+        }
+    });
     
     QApplication::init(|_| unsafe {
 
@@ -124,7 +157,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     notification.body, 
                     notification.actions, 
                     notification.image_data,
-                    notification.expire_timeout);
+                    notification.expire_timeout,
+                    notification.notification_id);
             }
         }));
 

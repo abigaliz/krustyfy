@@ -57,6 +57,7 @@ pub struct Notification {
     pub actions: Vec<String>,
     pub image_data: ImageData,
     pub expire_timeout: i32,
+    pub notification_id: u32,
 }
 
 /* impl<'a> Notification<'a> {

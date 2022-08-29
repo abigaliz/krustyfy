@@ -4,8 +4,8 @@ use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfI
 use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow, QPixmap};
 use qt_widgets::{QWidget, QDialog, SlotOfQWidgetQWidget};
 use signals2::Connect12;
-use tokio::sync::mpsc::Sender;
-use zbus::zvariant::Value;
+use tokio::sync::mpsc::{Sender, UnboundedSender};
+use zbus::{zvariant::Value, export::futures_util::TryFutureExt};
 use std::cell::{RefCell, Ref};
 
 use crate::{notification_widget::notifications::{self, NotificationWidget}, notification::{Notification, ImageData}, image_handler};
@@ -29,6 +29,7 @@ pub struct NotificationSpawner {
     reset_anim_time: QBox<SignalNoArgs>,
     timer: QBox<QTimer>,
     qobject: QBox<QObject>,
+    action_sender: UnboundedSender<i32>
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -38,7 +39,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: Sender<i32>) -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
         unsafe {
             let qobject = QObject::new_0a();
 
@@ -60,6 +61,7 @@ impl NotificationSpawner {
                 reset_anim_time,
                 timer,
                 qobject,
+                action_sender
             });
             
             this
@@ -79,7 +81,8 @@ impl NotificationSpawner {
         body: String, 
         actions: Vec<String>,
         image_data: ImageData,
-        expire_timeout: i32,) {
+        expire_timeout: i32,
+        notification_id: u32) {
 
         let close_signal = SignalOfQString::new();
 
@@ -89,7 +92,7 @@ impl NotificationSpawner {
 
         action_signal.connect_with_type( ConnectionType::QueuedConnection, &self.slot_on_action());
         
-        let _notification_widget = NotificationWidget::new(close_signal, action_signal, replaces_id);
+        let _notification_widget = NotificationWidget::new(close_signal, action_signal, notification_id);
 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
@@ -113,6 +116,7 @@ impl NotificationSpawner {
         _notification_widget.animate_entry((*self.widget_list.borrow()).len() as i32);
         
         println!("pushing new widget with id {}", _notification_widget.widget.win_id().to_string());
+
 
         (*self.widget_list.borrow_mut()).push(_notification_widget);
         self.reorder();
@@ -158,9 +162,62 @@ impl NotificationSpawner {
         }
     }
 
+    unsafe fn freeze(self : &Rc<Self>) {
+        let signal = SignalNoArgs::new();
+
+        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_freeze());
+
+        println!("Emitting freeze signal");
+        signal.emit();
+    }
+
+    #[slot(SlotNoArgs)]
+    unsafe fn on_freeze(self : &Rc<Self>) {
+        println!("freezing");
+
+        let list = &(*self.widget_list.borrow());
+
+        if list.len() == 0 {
+            return;
+        }
+
+        for i in 0..list.len() {
+            let widget = &list[i];
+
+            widget.freeze_signal.emit();
+        }
+    }
+
+    unsafe fn unfreeze(self : &Rc<Self>) {
+        let signal = SignalNoArgs::new();
+
+        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_unfreeze());
+
+        println!("Emitting unfreeze signal");
+        signal.emit();
+    }
+
+    #[slot(SlotNoArgs)]
+    unsafe fn on_unfreeze(self : &Rc<Self>) {
+        println!("unfreezing");
+
+        let list = &(*self.widget_list.borrow());
+
+        if list.len() == 0 {
+            return;
+        }
+
+        for i in 0..list.len() {
+            let widget = &list[i];
+
+            widget.unfreeze_signal.emit();
+        }
+    }
+
     #[slot(SlotOfInt)]
     unsafe fn on_action(self: &Rc<Self>, notifcation_id: i32) {
-
+        println!("OnAction!");
+        self.action_sender.send(notifcation_id);
     }
 
     #[slot(SlotOfQString)]

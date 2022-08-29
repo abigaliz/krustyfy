@@ -1,15 +1,16 @@
 pub mod notifications {
 
     use cpp_core::{Ptr, Ref, StaticUpcast, CppBox, NullPtr};
+    use device_query::{DeviceState, Keycode, DeviceQuery};
     use qt_core::{qs, slot, ContextMenuPolicy, QBox, QObject, 
         QPoint, SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup, SlotOfBool,
         WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString, SignalOfInt, q_time_line::State, q_abstract_animation, SignalNoArgs, CursorShape
     };
-    use qt_gui::{QPixmap, SignalOfQWindow, QCursor};
+    use qt_gui::{QPixmap, SignalOfQWindow, QCursor, QColor};
     use qt_widgets::{
         QAction, QApplication, QLineEdit, QMenu, QMessageBox, QPushButton, QTableWidget,
         QTableWidgetItem, QVBoxLayout, QWidget, SlotOfQPoint, SlotOfQTableWidgetItemQTableWidgetItem,
-        QFrame, QHBoxLayout, QLabel, QLayout, QGraphicsDropShadowEffect, QGraphicsBlurEffect
+        QFrame, QHBoxLayout, QLabel, QLayout, QGraphicsDropShadowEffect, QGraphicsBlurEffect, QStackedLayout
     };
     use signals2::Connect10;
     
@@ -58,7 +59,11 @@ pub mod notifications {
         blur_effect: QBox<QGraphicsBlurEffect>,
         action_signal: QBox<SignalOfInt>,
         action_button: QBox<QPushButton>,
-        notification_id: u32
+        notification_id: u32,
+        pub freeze_signal: QBox<SignalNoArgs>,
+        pub unfreeze_signal: QBox<SignalNoArgs>,
+        overlay: QBox<QWidget>,
+        frame_shadow: QBox<QGraphicsDropShadowEffect>
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -76,6 +81,8 @@ pub mod notifications {
                 // Set the default action overlay
                 let overlay = QWidget::new_0a();
 
+                overlay.set_geometry_4a(0, 0, 400, 400);
+
                 overlay.set_window_flags(
                     WindowType::FramelessWindowHint |
                     WindowType::WindowStaysOnTopHint |
@@ -88,9 +95,17 @@ pub mod notifications {
                 cursor.set_shape(CursorShape::PointingHandCursor);
 
                 overlay.set_cursor(cursor.as_ref());
+
+                let overlay_layout = QStackedLayout::new();
+                overlay_layout.set_geometry(&QRect::from_4_int(0, 0, 400, 300));
+                overlay_layout.set_margin(0);
+                overlay_layout.set_spacing(0);
+                overlay.set_layout(overlay_layout.as_ptr());
         
                 let action_button = QPushButton::new();
                 action_button.set_geometry_4a(0, 0, 400, 300);
+                
+                overlay_layout.add_widget(&action_button);
                 
                 // Set flags
                 widget.set_window_flags(
@@ -230,6 +245,8 @@ pub mod notifications {
                 vertical_body_layout.add_widget(&body_label);
 
                 let animate_entry_signal = SignalOfInt::new();
+                let freeze_signal = SignalNoArgs::new();
+                let unfreeze_signal = SignalNoArgs::new();
             
                 widget.show();
 
@@ -255,7 +272,11 @@ pub mod notifications {
                     blur_effect,
                     action_signal,
                     action_button,
-                    notification_id
+                    notification_id,
+                    freeze_signal,
+                    unfreeze_signal,
+                    overlay,
+                    frame_shadow
                 });
                 this.init();
                 this.animate_exit();
@@ -286,7 +307,19 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         pub unsafe fn check_hover(self: &Rc<Self>) {
+
+            let device_state = DeviceState::new();
+
+            let keys: Vec<Keycode> = device_state.get_keys();
+
+            if keys.contains(&Keycode::LAlt) {
+                self.freeze_signal.emit();
+            } else {
+                self.unfreeze_signal.emit();
+            }
+
             let pos = QCursor::pos_0a();
+
             if self.widget.geometry().contains_q_point(pos.as_ref()) {
                 self.hover();
             }
@@ -296,21 +329,42 @@ pub mod notifications {
         }
         
         pub unsafe fn hover(self: &Rc<Self>) {
-            if self.exit_animation.state() != q_abstract_animation::State::Running {
-                self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
-                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
-                self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
-                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
+            if self.overlay.is_visible() {
+                self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                self.widget.set_window_opacity(1.0);
+                self.frame_shadow.set_blur_radius(15.0);
+                self.frame_shadow.set_color(QColor::from_3_int(255, 255, 255).as_ref());
+                self.frame_shadow.set_offset_2_double(0.0, 0.0);
             }
+            else {
+                if self.exit_animation.state() != q_abstract_animation::State::Running {
+                    self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
+                    self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
+                    self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
+                    self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
+                }
+            }
+            
         }
 
         pub unsafe fn unhover(self: &Rc<Self>) {
-            if self.exit_animation.state() != q_abstract_animation::State::Running {
-                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
-                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+            if self.overlay.is_visible() {
                 self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
+                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                
+            } else {
+                if self.exit_animation.state() != q_abstract_animation::State::Running {
+                    self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                    self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+                    self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                    self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
+                }
             }
+
+            self.frame_shadow.set_blur_radius(10.0);
+            self.frame_shadow.set_color(QColor::from_3_int(0, 0, 0).as_ref());
+            self.frame_shadow.set_offset_2_double(1.0, 1.0);
+            
         }
 
         #[slot(SlotOfInt)]
@@ -352,6 +406,8 @@ pub mod notifications {
         unsafe fn init(self: &Rc<Self>) {
             self.animate_entry_signal.connect(&self.slot_animate_entry());
             self.action_button.clicked().connect(&self.slot_on_button_clicked());
+            self.freeze_signal.connect(&self.slot_on_freeze());
+            self.unfreeze_signal.connect(&self.slot_on_unfreeze());
         }
 
         #[slot(SlotNoArgs)]
@@ -362,8 +418,26 @@ pub mod notifications {
             self.widget.close();
         }
 
+        #[slot(SlotNoArgs)]
+        unsafe fn on_freeze(self: &Rc<Self>) {
+            self.exit_animation_group.pause();
+            self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+            self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+
+            self.overlay.set_geometry_1a(self.widget.geometry());
+            self.overlay.show();
+        }
+
+        #[slot(SlotNoArgs)]
+        unsafe fn on_unfreeze(self: &Rc<Self>) {
+            self.exit_animation_group.resume();
+            self.overlay.hide();
+        }
+
         #[slot(SlotOfBool)]
         unsafe fn on_button_clicked(self: &Rc<Self>, clicked: bool) {
+            println!("Clicked");
+            self.close_signal.emit(&qs(self.widget.win_id().to_string()));
             self.action_signal.emit(self.notification_id as i32);
         }
 
