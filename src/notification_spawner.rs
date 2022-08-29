@@ -1,15 +1,15 @@
 use std::{rc::Rc, collections::HashMap, slice::Iter, borrow::Borrow, cell::RefMut};
 
-use async_std::channel::Receiver;
+use async_std::channel::{Receiver, Sender};
 use cpp_core::{CppBox, StaticUpcast, Ptr, };
-use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString, QListOfQObject, ConnectionType};
-use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow};
+use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfInt, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString, QListOfQObject, ConnectionType, SignalOfInt};
+use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow, QPixmap};
 use qt_widgets::{QWidget, QDialog, SlotOfQWidgetQWidget};
 use signals2::Connect12;
 use zbus::zvariant::Value;
 use std::cell::{RefCell, Ref};
 
-use crate::{notification_widget::notifications::{self, NotificationWidget}, notification::Notification};
+use crate::{notification_widget::notifications::{self, NotificationWidget}, notification::{Notification, ImageData}, image_handler};
 
 struct VecRefWrapper<'a, T: 'a> {
     r: RefMut<'a, Vec<T>>
@@ -39,7 +39,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new() -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: Sender<i32>) -> Rc<NotificationSpawner> {
         unsafe {
             let qobject = QObject::new_0a();
 
@@ -71,18 +71,46 @@ impl NotificationSpawner {
         self.timer.start_0a()
     }
 
-    pub unsafe fn spawn_notification(self: &Rc<Self>, app_name: String, replaces_id: u32, app_icon: String, summary: String, body: String, actions: Vec<String>,
+    pub unsafe fn spawn_notification(
+        self: &Rc<Self>, 
+        app_name: String, 
+        replaces_id: u32, 
+        app_icon: String, 
+        summary: String, 
+        body: String, 
+        actions: Vec<String>,
+        image_data: ImageData,
         expire_timeout: i32,) {
 
         let close_signal = SignalOfQString::new();
 
-        let connection_type = ConnectionType::QueuedConnection;
+        close_signal.connect_with_type( ConnectionType::QueuedConnection, &self.slot_on_widget_close());
 
-        let connection = close_signal.connect_with_type(connection_type, &self.slot_on_widget_close());
+        let action_signal = SignalOfInt::new();
+
+        action_signal.connect_with_type( ConnectionType::QueuedConnection, &self.slot_on_action());
         
-        let _notification_widget = NotificationWidget::new(close_signal);
+        let _notification_widget = NotificationWidget::new(close_signal, action_signal, replaces_id);
 
-        _notification_widget.set_content(qs(app_name), qs(summary), qs(body));
+        self.check_hover.connect(&_notification_widget.slot_check_hover());
+
+        let mut icon = QPixmap::new();
+
+        if !image_data.desktop_entry.is_empty() {
+            icon = image_handler::find_icon(&image_data.desktop_entry);
+        }
+        else {
+            icon = image_handler::find_icon(&app_name);
+        }
+
+        if image_data.is_empty {
+            _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
+        }
+        else {
+            let pixmap = image_handler::parse_image(image_data);
+            _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
+        }
+
         _notification_widget.animate_entry((*self.widget_list.borrow()).len() as i32);
         
         println!("pushing new widget with id {}", _notification_widget.widget.win_id().to_string());
@@ -108,7 +136,7 @@ impl NotificationSpawner {
 
         println!("there are {} items", list.len().to_string());
 
-        if (list.len() == 0) {
+        if list.len() == 0 {
             return;
         }
 
@@ -131,6 +159,11 @@ impl NotificationSpawner {
         }
     }
 
+    #[slot(SlotOfInt)]
+    unsafe fn on_action(self: &Rc<Self>, notifcation_id: i32) {
+
+    }
+
     #[slot(SlotOfQString)]
     unsafe fn on_widget_close(self : &Rc<Self>, closed_widget: cpp_core::Ref<QString>) {    
         let mut notification_widget_index: usize = 0;
@@ -143,7 +176,7 @@ impl NotificationSpawner {
 
         for i in 0..&list.len() - 1 {
             let widget = &list[i];
-            if (widget.widget.win_id().to_string() == closed_widget.to_std_string()) {
+            if widget.widget.win_id().to_string() == closed_widget.to_std_string() {
                 notification_widget_index = i;
                 break;
             }

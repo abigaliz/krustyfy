@@ -2,15 +2,16 @@ pub mod notifications {
 
     use cpp_core::{Ptr, Ref, StaticUpcast, CppBox, NullPtr};
     use qt_core::{qs, slot, ContextMenuPolicy, QBox, QObject, 
-        QPoint, SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup,
-        WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString, SignalOfInt
+        QPoint, SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup, SlotOfBool,
+        WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString, SignalOfInt, q_time_line::State, q_abstract_animation, SignalNoArgs, CursorShape
     };
-    use qt_gui::{QPixmap, SignalOfQWindow};
+    use qt_gui::{QPixmap, SignalOfQWindow, QCursor};
     use qt_widgets::{
         QAction, QApplication, QLineEdit, QMenu, QMessageBox, QPushButton, QTableWidget,
         QTableWidgetItem, QVBoxLayout, QWidget, SlotOfQPoint, SlotOfQTableWidgetItemQTableWidgetItem,
-        QFrame, QHBoxLayout, QLabel, QLayout, QGraphicsDropShadowEffect
+        QFrame, QHBoxLayout, QLabel, QLayout, QGraphicsDropShadowEffect, QGraphicsBlurEffect
     };
+    use signals2::Connect10;
     
     use std::rc::Rc;
 
@@ -23,10 +24,14 @@ pub mod notifications {
     const NOTIFICATION_DURATION: i32 = 6500;
     const NOTIFICATION_EXIT_DURATION: i32 = 600;
 
-    const DEFAULT_NOTIFICATION_BLUR_RADIUS: i32 = 1;
+    const DEFAULT_NOTIFICATION_BLUR_RADIUS: f64 = 1.0;
     const DISAPPEARING_NOTIFICATION_BLUR_RADIUS: i32 = 15;
 
     const DEFAULT_NOTIFICATION_OPACITY: f32 = 0.8;
+
+    const HOVERED_NOTIFICATION_OPACITY: f32 = 0.2;
+    const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
+
 
     pub struct NotificationWidget {
         pub widget: QBox<QWidget>,
@@ -50,6 +55,10 @@ pub mod notifications {
         body_label: QBox<QLabel>,
         close_signal: QBox<SignalOfQString>,
         pub animate_entry_signal: QBox<SignalOfInt>,
+        blur_effect: QBox<QGraphicsBlurEffect>,
+        action_signal: QBox<SignalOfInt>,
+        action_button: QBox<QPushButton>,
+        notification_id: u32
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -59,9 +68,29 @@ pub mod notifications {
     }
 
     impl NotificationWidget {
-        pub fn new(close_signal: QBox<SignalOfQString>) -> Rc<NotificationWidget> {
+        pub fn new(close_signal: QBox<SignalOfQString>, action_signal: QBox<SignalOfInt>, notification_id: u32) -> Rc<NotificationWidget> {
             unsafe {
+                // Set the notification widget
                 let widget = QWidget::new_0a();
+
+                // Set the default action overlay
+                let overlay = QWidget::new_0a();
+
+                overlay.set_window_flags(
+                    WindowType::FramelessWindowHint |
+                    WindowType::WindowStaysOnTopHint |
+                    WindowType::Tool |
+                    WindowType::BypassWindowManagerHint);
+
+                overlay.set_window_opacity(0.0);
+
+                let cursor = QCursor::new();
+                cursor.set_shape(CursorShape::PointingHandCursor);
+
+                overlay.set_cursor(cursor.as_ref());
+        
+                let action_button = QPushButton::new();
+                action_button.set_geometry_4a(0, 0, 400, 300);
                 
                 // Set flags
                 widget.set_window_flags(
@@ -168,7 +197,7 @@ pub mod notifications {
                 let image_label = QLabel::new();
 
                 image_label.set_maximum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
-                image_label.set_minimum_size_2a(0, IMAGE_SIZE);
+                image_label.set_minimum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
                 image_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0); border-style: none; border-radius: 20px;"));
 
                 let title_label = QLabel::new();
@@ -223,6 +252,10 @@ pub mod notifications {
                     body_label,
                     close_signal,
                     animate_entry_signal,
+                    blur_effect,
+                    action_signal,
+                    action_button,
+                    notification_id
                 });
                 this.init();
                 this.animate_exit();
@@ -230,16 +263,54 @@ pub mod notifications {
             }
         }
 
-        pub unsafe fn set_content(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>) {
+        pub unsafe fn set_content(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
             self.app_name_label.set_text(&app_name);
             self.body_label.set_text(&body);
-            self.title_label.set_text(&title);            
+            self.title_label.set_text(&title); 
+            self.icon_label.set_pixmap(&icon);   
+            
+            self.image_label.set_maximum_size_2a(0, IMAGE_SIZE);
+            self.image_label.set_minimum_size_2a(0, IMAGE_SIZE);
         }
 
-        pub unsafe fn set_content_with_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>, image: CppBox<QPixmap>) {
+        pub unsafe fn set_content_with_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, image: CppBox<QPixmap>, icon: CppBox<QPixmap>) {
             self.app_name_label.set_text(&app_name);
             self.body_label.set_text(&body);
-            self.title_label.set_text(&title);            
+            self.title_label.set_text(&title); 
+
+            let scaled_image = image.scaled_2_int(IMAGE_SIZE, IMAGE_SIZE);
+
+            self.image_label.set_pixmap(&scaled_image);  
+            self.icon_label.set_pixmap(&icon);       
+        }
+
+        #[slot(SlotNoArgs)]
+        pub unsafe fn check_hover(self: &Rc<Self>) {
+            let pos = QCursor::pos_0a();
+            if self.widget.geometry().contains_q_point(pos.as_ref()) {
+                self.hover();
+            }
+            else {
+                self.unhover();
+            }
+        }
+        
+        pub unsafe fn hover(self: &Rc<Self>) {
+            if self.exit_animation.state() != q_abstract_animation::State::Running {
+                self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
+                self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
+                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
+            }
+        }
+
+        pub unsafe fn unhover(self: &Rc<Self>) {
+            if self.exit_animation.state() != q_abstract_animation::State::Running {
+                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+                self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
+            }
         }
 
         #[slot(SlotOfInt)]
@@ -264,7 +335,7 @@ pub mod notifications {
             self.exit_animation.set_easing_curve(&qt_core::QEasingCurve::new_1a(qt_core::q_easing_curve::Type::OutCurve));
 
             self.blur_animation.set_duration(NOTIFICATION_EXIT_DURATION);
-            self.blur_animation.set_start_value(&qt_core::QVariant::from_int(DEFAULT_NOTIFICATION_BLUR_RADIUS));
+            self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
             self.blur_animation.set_end_value(&qt_core::QVariant::from_int(DISAPPEARING_NOTIFICATION_BLUR_RADIUS));
 
             self.parallel_animation.add_animation(&self.blur_animation);
@@ -280,7 +351,7 @@ pub mod notifications {
 
         unsafe fn init(self: &Rc<Self>) {
             self.animate_entry_signal.connect(&self.slot_animate_entry());
-            //self.entry_animation.finished().connect(&self.slot_animate_exit());
+            self.action_button.clicked().connect(&self.slot_on_button_clicked());
         }
 
         #[slot(SlotNoArgs)]
@@ -291,10 +362,11 @@ pub mod notifications {
             self.widget.close();
         }
 
-        #[slot(SlotNoArgs)]
-        unsafe fn on_button_clicked(self: &Rc<Self>) {
-
+        #[slot(SlotOfBool)]
+        unsafe fn on_button_clicked(self: &Rc<Self>, clicked: bool) {
+            self.action_signal.emit(self.notification_id as i32);
         }
+
 
         #[slot(SlotOfQTableWidgetItemQTableWidgetItem)]
         unsafe fn on_table_current_item_changed(
