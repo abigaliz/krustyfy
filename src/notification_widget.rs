@@ -307,7 +307,6 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         pub unsafe fn check_hover(self: &Rc<Self>) {
-
             let device_state = DeviceState::new();
 
             let keys: Vec<Keycode> = device_state.get_keys();
@@ -420,6 +419,9 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_freeze(self: &Rc<Self>) {
+            if self.exit_animation_group.state() == q_abstract_animation::State::Paused {
+                return;
+            }
             self.exit_animation_group.pause();
             self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
             self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
@@ -430,6 +432,9 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_unfreeze(self: &Rc<Self>) {
+            if self.exit_animation_group.state() != q_abstract_animation::State::Paused {
+                return;
+            }
             self.exit_animation_group.resume();
             self.overlay.hide();
         }
