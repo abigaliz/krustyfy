@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'test-helloworld'",
+            "name": "Debug executable 'krustyfy'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=test-helloworld",
-                    "--package=test-helloworld"
+                    "--bin=krustyfy",
+                    "--package=krustyfy"
                 ],
                 "filter": {
-                    "name": "test-helloworld",
+                    "name": "krustyfy",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'test-helloworld'",
+            "name": "Debug unit tests in executable 'krustyfy'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=test-helloworld",
-                    "--package=test-helloworld"
+                    "--bin=krustyfy",
+                    "--package=krustyfy"
                 ],
                 "filter": {
-                    "name": "test-helloworld",
+                    "name": "krustyfy",
                     "kind": "bin"
                 }
             },

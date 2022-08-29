@@ -419,24 +419,23 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_freeze(self: &Rc<Self>) {
+            self.overlay.set_geometry_1a(self.widget.geometry());
+            self.overlay.show();
             if self.exit_animation_group.state() == q_abstract_animation::State::Paused {
                 return;
             }
             self.exit_animation_group.pause();
             self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
             self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
-
-            self.overlay.set_geometry_1a(self.widget.geometry());
-            self.overlay.show();
         }
 
         #[slot(SlotNoArgs)]
         unsafe fn on_unfreeze(self: &Rc<Self>) {
+            self.overlay.hide();
             if self.exit_animation_group.state() != q_abstract_animation::State::Paused {
                 return;
             }
             self.exit_animation_group.resume();
-            self.overlay.hide();
         }
 
         #[slot(SlotOfBool)]

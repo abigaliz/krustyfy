@@ -77,14 +77,14 @@ impl NotificationHandler {
         
         self.sender.send(notification).await;
 
-        return Ok(self.count);
+        return Ok(notification_id);
     }
 
     #[dbus_interface(out_args("name", "vendor", "version", "spec_version"), name="GetServerInformation")]
     fn get_server_information(&mut self) -> zbus::fdo::Result<(String, String, String, String)> {
-        let name = String::from("");
-        let vendor = String::from("notif");
-        let version = String::from("1");
+        let name = String::from("Notification Daemon");
+        let vendor = String::from("krustyfy");
+        let version = String::from("v0.0.1");
         let specification_version = String::from("1.2");
 
         Ok((name, vendor, version, specification_version))
