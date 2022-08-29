@@ -72,6 +72,24 @@ impl NotificationSpawner {
         self.timer.start_0a()
     }
 
+    #[slot(SlotOfQString)]
+    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QString>) {
+        let notification: Notification = serde_json::from_str(&serialized_notification.to_std_string()).unwrap();
+
+        println!("{}", notification.app_name);
+
+        self.spawn_notification(
+            notification.app_name, 
+            notification.replaces_id, 
+            notification.app_icon, 
+            notification.summary, 
+            notification.body, 
+            notification.actions, 
+            notification.image_data, 
+            notification.expire_timeout, 
+            notification.notification_id);
+    }
+
     pub unsafe fn spawn_notification(
         self: &Rc<Self>, 
         app_name: String, 

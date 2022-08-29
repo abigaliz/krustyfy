@@ -1034,6 +1034,8 @@ dependencies = [
  "qt_gui",
  "qt_ui_tools",
  "qt_widgets",
+ "serde",
+ "serde_json",
  "signals2",
  "tokio",
  "zbus",

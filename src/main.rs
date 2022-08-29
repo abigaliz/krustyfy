@@ -1,8 +1,9 @@
 use std::{error::Error, time::Duration};
 use notification::{Notification, ImageData};
 use notification_spawner::NotificationSpawner;
-use qt_core::{QTimer, SlotNoArgs};
+use qt_core::{QTimer, SlotNoArgs, SignalOfQString, QString, SignalNoArgs};
 use qt_widgets::QApplication;
+use signals2::{Signal, Connect1};
 use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array, export::futures_util::StreamExt};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -120,11 +121,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
-/*         spawn(async move {
-            while let Some(message) = action_receiver.recv().await {
-                println!("GOT = {}", message);
-            }
-        }); */
     tokio::spawn(async move {
         while let Some(message) = action_receiver.recv().await {
             println!("GOT = {}", message);
@@ -137,32 +133,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 &(message as u32, "default")).await;
         }
     });
-    
+
     QApplication::init(|_| unsafe {
 
         let spawner = NotificationSpawner::new(action_sender);
-        
-        let timer = QTimer::new_0a();
 
-        timer.timeout().connect(&SlotNoArgs::new(&timer, move || {
-            let notification_message =  notification_receiver.try_recv();
+        let notitification_signal = SignalOfQString::new();
 
-            if notification_message.is_ok() {
-                let notification = notification_message.unwrap();
-                spawner.spawn_notification(
-                    notification.app_name, 
-                    notification.replaces_id, 
-                    notification.app_icon, 
-                    notification.summary, 
-                    notification.body, 
-                    notification.actions, 
-                    notification.image_data,
-                    notification.expire_timeout,
-                    notification.notification_id);
+        notitification_signal.connect(&spawner.slot_on_spawn_notification());
+
+        let signal = notitification_signal.as_raw_ref();
+        tokio::spawn(async move {
+            while let Some(message) = notification_receiver.recv().await {
+    
+                let json = serde_json::to_string(&message).unwrap();
+    
+                signal.unwrap().emit(QString::from_std_str(json).as_ref());
             }
-        }));
-
-        timer.start_1a(100);
+        });
 
         QApplication::exec()
 

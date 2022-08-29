@@ -17,3 +17,5 @@ byteorder = "1.4.3"
 zvariant = "3.6.0"
 tokio={version="1.20.1", features = ["full"]}
 device_query = "1.1.1"
+serde_json = "1.0.85"
+serde = "1.0.144"
