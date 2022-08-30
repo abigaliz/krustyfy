@@ -1,18 +1,18 @@
 pub mod notifications {
-
-    use cpp_core::{Ptr, StaticUpcast, CppBox};
-    use device_query::{DeviceState, Keycode, DeviceQuery};
-    use qt_core::{qs, slot, QBox, QObject, 
-        SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup, SlotOfBool,
-        WindowType, QByteArray, QRect, QString, WidgetAttribute, SignalOfQString, SignalOfInt, q_abstract_animation, SignalNoArgs, CursorShape
-    };
-    use qt_gui::{QPixmap, QCursor, QColor};
-    use qt_widgets::{ QPushButton,
-         QVBoxLayout, QWidget,
-        QFrame, QHBoxLayout, QLabel,  QGraphicsDropShadowEffect, QGraphicsBlurEffect, QStackedLayout
-    };
-    
     use std::rc::Rc;
+
+    use cpp_core::{CppBox, Ptr, StaticUpcast};
+    use device_query::{DeviceQuery, DeviceState, Keycode};
+
+    use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
+                  QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfBool, SlotOfInt, WidgetAttribute, WindowType
+    };
+    use qt_gui::{QColor, QCursor, QPixmap};
+    use qt_widgets::{QFrame,
+                     QGraphicsBlurEffect, QGraphicsDropShadowEffect,
+                     QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QWidget
+    };
 
     const NOTIFICATION_HEIGHT: i32 = 143;
     const NOTIFICATION_WIDTH: i32 = 318;
@@ -81,7 +81,7 @@ pub mod notifications {
                     WindowType::Tool |
                     WindowType::BypassWindowManagerHint);
 
-                overlay.set_window_opacity(0.0);
+                overlay.set_window_opacity(1.0);
 
                 let cursor = QCursor::new();
                 cursor.set_shape(CursorShape::PointingHandCursor);
@@ -110,10 +110,11 @@ pub mod notifications {
                 let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);
 
                 widget.set_graphics_effect(&blur_effect);
-                blur_effect.set_blur_radius(1.0);
+                blur_effect.set_blur_radius(0.0);
 
                 widget.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
                 widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+                widget.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
 
                 widget.set_geometry_4a(0, 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
 
@@ -322,13 +323,11 @@ pub mod notifications {
                 self.frame_shadow.set_color(QColor::from_3_int(255, 255, 255).as_ref());
                 self.frame_shadow.set_offset_2_double(0.0, 0.0);
             }
-            else {
-                if self.exit_animation.state() != q_abstract_animation::State::Running {
-                    self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
-                    self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
-                    self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
-                    self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
-                }
+            else if self.exit_animation.state() != q_abstract_animation::State::Running {
+                self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
+                self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
+                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
             }
             
         }
@@ -338,13 +337,11 @@ pub mod notifications {
                 self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
                 self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
                 
-            } else {
-                if self.exit_animation.state() != q_abstract_animation::State::Running {
-                    self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
-                    self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
-                    self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-                    self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
-                }
+            } else if self.exit_animation.state() != q_abstract_animation::State::Running {
+                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+                self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
             }
 
             self.frame_shadow.set_blur_radius(10.0);
@@ -398,9 +395,7 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_close(self: &Rc<Self>) {
-            println!("emitting on_close signal for {}", self.widget.win_id().to_string());
             self.close_signal.emit(&qs(self.widget.win_id().to_string()));
-            println!("emitted on_close signal for {}", self.widget.win_id().to_string());
             self.widget.close();
         }
 

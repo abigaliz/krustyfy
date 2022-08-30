@@ -1,13 +1,16 @@
-use std::{error::Error};
-use notification::{Notification, ImageData};
-use notification_spawner::NotificationSpawner;
-use qt_core::{SignalOfQString, QString};
-use qt_widgets::QApplication;
-use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
+use std::error::Error;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use zvariant::{Value};
-use tokio::{self, sync::mpsc::{Sender, self}};
+
+use tokio::{self, sync::mpsc::{self, Sender}};
+use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
+use zvariant::Value;
+
+use notification::{ImageData, Notification};
+use notification_spawner::NotificationSpawner;
+use qt_core::{QString, SignalOfQString, ConnectionType};
+use qt_widgets::QApplication;
+
 mod notification_widget;
 mod notification_spawner;
 mod notification;
@@ -22,7 +25,14 @@ struct NotificationHandler {
 #[dbus_interface(name = "org.freedesktop.Notifications")]
 impl NotificationHandler {
     #[dbus_interface(name="Notify")]
-    async fn notify(&mut self, app_name: String, replaces_id: u32, app_icon: String, summary: String, body: String, actions: Vec<String>,
+    async fn notify(
+        &mut self,
+        app_name: String,
+        replaces_id: u32,
+        app_icon: String,
+        summary: String,
+        body: String,
+        actions: Vec<String>,
         hints: HashMap<String, Value<'_>>,
         expire_timeout: i32,  ) -> zbus::fdo::Result<u32> {
 
@@ -35,15 +45,16 @@ impl NotificationHandler {
         let mut image_data = ImageData::empty();
 
         if hints.contains_key("image-data") {
-            let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap().clone();
+            let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap();
 
-            let width_value = image_structure.fields()[0].clone();
-            let height_value = image_structure.fields()[1].clone();
-            let rowstride_value = image_structure.fields()[2].clone();
-            let has_alpha_value = image_structure.fields()[3].clone();
-            let bits_per_sample_value = image_structure.fields()[4].clone();
-            let channels_value = image_structure.fields()[5].clone();
-            let data_value = image_structure.fields()[6].clone();
+            let fields = image_structure.fields();
+            let width_value = &fields[0];
+            let height_value = &fields[1];
+            let rowstride_value = &fields[2];
+            let has_alpha_value = &fields[3];
+            let bits_per_sample_value = &fields[4];
+            let channels_value = &fields[5];
+            let data_value = &fields[6];
 
             let image_raw_bytes_array = Array::try_from(data_value).ok().unwrap().get().to_vec();
 
@@ -55,7 +66,7 @@ impl NotificationHandler {
             let bits_per_sample = i32::try_from(bits_per_sample_value).ok().unwrap();
             let channels = i32::try_from(channels_value).ok().unwrap();
             let mut data = Vec::new();
-            (&image_raw_bytes_array).to_owned().into_iter().for_each(|f| {
+            (&image_raw_bytes_array).iter().for_each(|f| {
                 data.push(u8::try_from(f).ok().unwrap());
             });
 
@@ -76,7 +87,7 @@ impl NotificationHandler {
         
         self.sender.send(notification).await.unwrap();
 
-        return Ok(notification_id);
+        Ok(notification_id)
     }
 
     #[dbus_interface(out_args("name", "vendor", "version", "spec_version"), name="GetServerInformation")]
@@ -121,9 +132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     tokio::spawn(async move {
-        while let Some(message) = action_receiver.recv().await {
-            println!("GOT = {}", message);
-            
+        while let Some(message) = action_receiver.recv().await {            
             connection.emit_signal(
                 None::<()>, 
                 "/org/freedesktop/Notifications", 
@@ -135,16 +144,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     QApplication::init(|_| unsafe {
 
-        let spawner = NotificationSpawner::new(action_sender);
+        let mut spawner = NotificationSpawner::new(action_sender);
+
+        spawner.int_timer();
 
         let notitification_signal = SignalOfQString::new();
 
-        notitification_signal.connect(&spawner.slot_on_spawn_notification());
+        notitification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_spawn_notification());
 
         let signal = notitification_signal.as_raw_ref();
         tokio::spawn(async move {
-            while let Some(message) = notification_receiver.recv().await {
-    
+            while let Some(message) = notification_receiver.recv().await {    
                 let json = serde_json::to_string(&message).unwrap();
     
                 signal.unwrap().emit(QString::from_std_str(json).as_ref());

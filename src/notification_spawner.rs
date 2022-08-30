@@ -1,18 +1,20 @@
-use std::{rc::Rc, slice::Iter, cell::RefMut};
-use cpp_core::{StaticUpcast, Ptr, };
-use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfInt, QObject, SlotOfQString, SignalOfQString, ConnectionType, SignalOfInt};
-use tokio::sync::mpsc::{UnboundedSender};
-use std::cell::{RefCell};
+use std::{cell::RefMut, rc::Rc, slice::Iter};
+use std::cell::RefCell;
 
-use crate::{notification_widget::notifications::{self, NotificationWidget}, notification::{Notification, ImageData}, image_handler};
+use cpp_core::{Ptr, StaticUpcast, };
+use tokio::sync::mpsc::UnboundedSender;
+
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString};
+
+use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{self, NotificationWidget}};
 
 struct VecRefWrapper<'a, T: 'a> {
     r: RefMut<'a, Vec<T>>
 }
 
 impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b VecRefWrapper<'a, T> {
-    type IntoIter = Iter<'a, T>;
     type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
 
     fn into_iter(self) -> Iter<'a, T> {
         self.r.iter()
@@ -23,7 +25,8 @@ pub struct NotificationSpawner {
     widget_list: RefCell<Vec<Rc<notifications::NotificationWidget>>>,
     check_hover: QBox<SignalNoArgs>,
     qobject: QBox<QObject>,
-    action_sender: UnboundedSender<i32>
+    action_sender: UnboundedSender<i32>,
+    timer: QBox<QTimer>
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -45,24 +48,24 @@ impl NotificationSpawner {
 
             timer.timeout().connect(&check_hover);
 
-            timer.start_0a();
-
-            let this = Rc::new(Self {
+            Rc::new(Self {
                 widget_list,
                 check_hover,
                 qobject,
-                action_sender
-            });
-            
-            this
+                action_sender,
+                timer
+            })
         }
+    }
+
+    pub unsafe fn int_timer(self: &Rc<Self>)
+    {
+        self.timer.start_0a();
     }
 
     #[slot(SlotOfQString)]
     pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QString>) {
         let notification: Notification = serde_json::from_str(&serialized_notification.to_std_string()).unwrap();
-
-        println!("{}", notification.app_name);
 
         self.spawn_notification(
             notification.app_name, 
@@ -116,8 +119,6 @@ impl NotificationSpawner {
         }
 
         _notification_widget.animate_entry((*self.widget_list.borrow()).len() as i32);
-        
-        println!("pushing new widget with id {}", _notification_widget.widget.win_id().to_string());
 
 
         (*self.widget_list.borrow_mut()).push(_notification_widget);
@@ -127,46 +128,27 @@ impl NotificationSpawner {
     unsafe fn reorder(self : &Rc<Self>) {
         let signal = SignalNoArgs::new();
 
-        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_reorder());
+        signal.connect_with_type(ConnectionType::QueuedConnection,&self.slot_on_reorder());
 
-        println!("Emitting reorder signal");
         signal.emit();
     }
 
     #[slot(SlotNoArgs)]
     unsafe fn on_reorder(self : &Rc<Self>) {
-        println!("reordering");
-
-        let list = &(*self.widget_list.borrow());
-
-        println!("there are {} items", list.len().to_string());
-
-        if list.len() == 0 {
-            return;
-        }
+        let list = self.widget_list.borrow();
 
         for i in 0..list.len() {
-            println!("looping through item {} ", i.to_string());
             let widget = &list[i];
-
-            println!("obtained widget {} ", i.to_string());
 
             let topleft = widget.widget.screen().geometry().top_left();
 
-            println!("setting geometry for {}", i.to_string());
-
             widget.widget.set_geometry_4a(topleft.x(), widget.widget.y(), widget.widget.width(), widget.widget.height());
-
-            println!("animating entry for {}", i.to_string());
             widget.animate_entry_signal.emit(i as i32);
-
-            println!("animated entry for {}", i.to_string());
         }
     }
 
     #[slot(SlotOfInt)]
     unsafe fn on_action(self: &Rc<Self>, notifcation_id: i32) {
-        println!("OnAction!");
         self.action_sender.send(notifcation_id).unwrap();
     }
 
@@ -174,11 +156,7 @@ impl NotificationSpawner {
     unsafe fn on_widget_close(self : &Rc<Self>, closed_widget: cpp_core::Ref<QString>) {    
         let mut notification_widget_index: usize = 0;
 
-        println!("trying to close widget {}", closed_widget.to_std_string());
-
-        let list = (*self.widget_list.borrow()).clone();
-
-        println!("cloned list successfully");
+        let mut list = self.widget_list.borrow_mut();
 
         for i in 0..&list.len() - 1 {
             let widget = &list[i];
@@ -188,12 +166,8 @@ impl NotificationSpawner {
             }
         }
 
+        list.remove(notification_widget_index);
 
-        println!("removing {} - {}", notification_widget_index.to_string(), closed_widget.to_std_string());
-
-        (self.widget_list.borrow_mut()).remove(notification_widget_index);
-
-        println!("successfully removed {} - {}, no panic!", notification_widget_index.to_string(), closed_widget.to_std_string());
         self.reorder();
     }
 }

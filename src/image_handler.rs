@@ -1,6 +1,7 @@
-use cpp_core::{Ref, CppBox};
-use qt_core::{QString, QFileInfo};
-use qt_gui::{QPixmap, QIcon, QImage};
+use cpp_core::{CppBox, Ref};
+
+use qt_core::{QFileInfo, QString};
+use qt_gui::{QIcon, QImage, QPixmap};
 use qt_widgets::QFileIconProvider;
 
 use crate::notification::ImageData;
@@ -30,22 +31,18 @@ pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
         return icon.pixmap_int(25);
     }
 
-    let icon = QIcon::from_theme_1a(icon_name).pixmap_int(25);
-
-    icon
+    QIcon::from_theme_1a(icon_name).pixmap_int(25)
 }
 
 pub unsafe fn parse_image(image_data: ImageData) -> CppBox<QPixmap> {
-    let image_format: qt_gui::q_image::Format;
-
     let pixmap = QPixmap::new();
 
-    if image_data.has_alpha {
-        image_format = qt_gui::q_image::Format::FormatRGBA8888;
+    let image_format = if image_data.has_alpha {
+         qt_gui::q_image::Format::FormatRGBA8888
     }
     else {
-        image_format = qt_gui::q_image::Format::FormatRGB888;
-    }
+         qt_gui::q_image::Format::FormatRGB888
+    };
 
     let data = image_data.data.as_ptr();
 
