@@ -1,12 +1,8 @@
-use std::{rc::Rc, collections::HashMap, slice::Iter, borrow::Borrow, cell::RefMut};
-use cpp_core::{CppBox, StaticUpcast, Ptr, };
-use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfInt, QEvent, QObject, SlotOfQString, QPtr, SignalOfQString, QListOfQObject, ConnectionType, SignalOfInt};
-use qt_gui::{QCloseEvent, SlotOfQWindow, QWindow, SignalOfQWindow, QPixmap};
-use qt_widgets::{QWidget, QDialog, SlotOfQWidgetQWidget};
-use signals2::Connect12;
-use tokio::sync::mpsc::{Sender, UnboundedSender};
-use zbus::{zvariant::Value, export::futures_util::TryFutureExt};
-use std::cell::{RefCell, Ref};
+use std::{rc::Rc, slice::Iter, cell::RefMut};
+use cpp_core::{StaticUpcast, Ptr, };
+use qt_core::{QBox, SignalNoArgs, QTimer, qs, QString, slot, SlotNoArgs, SlotOfInt, QObject, SlotOfQString, SignalOfQString, ConnectionType, SignalOfInt};
+use tokio::sync::mpsc::{UnboundedSender};
+use std::cell::{RefCell};
 
 use crate::{notification_widget::notifications::{self, NotificationWidget}, notification::{Notification, ImageData}, image_handler};
 
@@ -26,8 +22,6 @@ impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b VecRefWrapper<'a, T> {
 pub struct NotificationSpawner {
     widget_list: RefCell<Vec<Rc<notifications::NotificationWidget>>>,
     check_hover: QBox<SignalNoArgs>,
-    reset_anim_time: QBox<SignalNoArgs>,
-    timer: QBox<QTimer>,
     qobject: QBox<QObject>,
     action_sender: UnboundedSender<i32>
 }
@@ -44,11 +38,9 @@ impl NotificationSpawner {
             let qobject = QObject::new_0a();
 
             let widget_list = RefCell::new(Vec::new());
-            let qwidget_list = QListOfQObject::new();
             let timer = QTimer::new_0a();
             timer.set_interval(100);
 
-            let reset_anim_time = SignalNoArgs::new();
             let check_hover= SignalNoArgs::new();
 
             timer.timeout().connect(&check_hover);
@@ -58,18 +50,12 @@ impl NotificationSpawner {
             let this = Rc::new(Self {
                 widget_list,
                 check_hover,
-                reset_anim_time,
-                timer,
                 qobject,
                 action_sender
             });
             
             this
         }
-    }
-
-    pub unsafe fn init_timer(&mut self) {
-        self.timer.start_0a()
     }
 
     #[slot(SlotOfQString)]
@@ -93,13 +79,13 @@ impl NotificationSpawner {
     pub unsafe fn spawn_notification(
         self: &Rc<Self>, 
         app_name: String, 
-        replaces_id: u32, 
-        app_icon: String, 
+        _replaces_id: u32, 
+        _app_icon: String, 
         summary: String, 
         body: String, 
-        actions: Vec<String>,
+        _actions: Vec<String>,
         image_data: ImageData,
-        expire_timeout: i32,
+        _expire_timeout: i32,
         notification_id: u32) {
 
         let close_signal = SignalOfQString::new();
@@ -114,14 +100,12 @@ impl NotificationSpawner {
 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
-        let mut icon = QPixmap::new();
-
-        if !image_data.desktop_entry.is_empty() {
-            icon = image_handler::find_icon(&image_data.desktop_entry);
-        }
-        else {
-            icon = image_handler::find_icon(&app_name);
-        }
+        let icon =    if !image_data.desktop_entry.is_empty() {
+                                        image_handler::find_icon(&image_data.desktop_entry)
+                                    }
+                                    else {
+                                        image_handler::find_icon(&app_name)
+                                    };
 
         if image_data.is_empty {
             _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
@@ -180,62 +164,10 @@ impl NotificationSpawner {
         }
     }
 
-    unsafe fn freeze(self : &Rc<Self>) {
-        let signal = SignalNoArgs::new();
-
-        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_freeze());
-
-        println!("Emitting freeze signal");
-        signal.emit();
-    }
-
-    #[slot(SlotNoArgs)]
-    unsafe fn on_freeze(self : &Rc<Self>) {
-        println!("freezing");
-
-        let list = &(*self.widget_list.borrow());
-
-        if list.len() == 0 {
-            return;
-        }
-
-        for i in 0..list.len() {
-            let widget = &list[i];
-
-            widget.freeze_signal.emit();
-        }
-    }
-
-    unsafe fn unfreeze(self : &Rc<Self>) {
-        let signal = SignalNoArgs::new();
-
-        signal.connect_with_type(ConnectionType::DirectConnection,&self.slot_on_unfreeze());
-
-        println!("Emitting unfreeze signal");
-        signal.emit();
-    }
-
-    #[slot(SlotNoArgs)]
-    unsafe fn on_unfreeze(self : &Rc<Self>) {
-        println!("unfreezing");
-
-        let list = &(*self.widget_list.borrow());
-
-        if list.len() == 0 {
-            return;
-        }
-
-        for i in 0..list.len() {
-            let widget = &list[i];
-
-            widget.unfreeze_signal.emit();
-        }
-    }
-
     #[slot(SlotOfInt)]
     unsafe fn on_action(self: &Rc<Self>, notifcation_id: i32) {
         println!("OnAction!");
-        self.action_sender.send(notifcation_id);
+        self.action_sender.send(notifcation_id).unwrap();
     }
 
     #[slot(SlotOfQString)]
@@ -263,9 +195,5 @@ impl NotificationSpawner {
 
         println!("successfully removed {} - {}, no panic!", notification_widget_index.to_string(), closed_widget.to_std_string());
         self.reorder();
-    }
-
-    pub fn iter(&self) -> VecRefWrapper<Rc<notifications::NotificationWidget>> {
-        VecRefWrapper { r: self.widget_list.borrow_mut() }
     }
 }

@@ -1,5 +1,6 @@
 use serde::{Serialize, Deserialize};
 
+#[derive(Debug)]
 #[derive(Serialize, Deserialize)]
 pub struct ImageData {
     pub is_empty: bool,
@@ -12,6 +13,7 @@ pub struct ImageData {
     pub data: Vec<u8>,
     pub desktop_entry: String,
 }
+
 
 impl ImageData {
     pub fn empty() -> ImageData {
@@ -51,6 +53,7 @@ impl ImageData {
     }
 }
 
+#[derive(Debug)]
 #[derive(Serialize, Deserialize)]
 pub struct Notification {
     pub app_name: String, 

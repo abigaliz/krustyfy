@@ -1,14 +1,13 @@
-use std::{error::Error, time::Duration};
+use std::{error::Error};
 use notification::{Notification, ImageData};
 use notification_spawner::NotificationSpawner;
-use qt_core::{QTimer, SlotNoArgs, SignalOfQString, QString, SignalNoArgs};
+use qt_core::{SignalOfQString, QString};
 use qt_widgets::QApplication;
-use signals2::{Signal, Connect1};
-use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array, export::futures_util::StreamExt};
+use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use zvariant::{Value};
-use tokio::{self, sync::mpsc::{Sender, Receiver, self}};
+use tokio::{self, sync::mpsc::{Sender, self}};
 mod notification_widget;
 mod notification_spawner;
 mod notification;
@@ -75,7 +74,7 @@ impl NotificationHandler {
             app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout, notification_id
         };
         
-        self.sender.send(notification).await;
+        self.sender.send(notification).await.unwrap();
 
         return Ok(notification_id);
     }
@@ -91,7 +90,7 @@ impl NotificationHandler {
     }
 
     #[dbus_interface(name="GetCapabilities")]
-    fn get_capabilities(&mut self) -> zbus::fdo::Result<(Vec<&str>)> {
+    fn get_capabilities(&mut self) -> zbus::fdo::Result<Vec<&str>> {
 
         let capabilities = ["action-icons",
         "actions",
@@ -130,7 +129,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "/org/freedesktop/Notifications", 
                 "org.freedesktop.Notifications", 
                 "ActionInvoked", 
-                &(message as u32, "default")).await;
+                &(message as u32, "default")).await.unwrap();
         }
     });
 

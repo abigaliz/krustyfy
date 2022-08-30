@@ -1,18 +1,16 @@
 pub mod notifications {
 
-    use cpp_core::{Ptr, Ref, StaticUpcast, CppBox, NullPtr};
+    use cpp_core::{Ptr, StaticUpcast, CppBox};
     use device_query::{DeviceState, Keycode, DeviceQuery};
-    use qt_core::{qs, slot, ContextMenuPolicy, QBox, QObject, 
-        QPoint, SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup, SlotOfBool,
-        WindowType, QByteArray, QRect, QString, WidgetAttribute, SlotOfQString, SignalOfQString, SignalOfInt, q_time_line::State, q_abstract_animation, SignalNoArgs, CursorShape
+    use qt_core::{qs, slot, QBox, QObject, 
+        SlotNoArgs, SlotOfInt, QPropertyAnimation, QSequentialAnimationGroup, QParallelAnimationGroup, SlotOfBool,
+        WindowType, QByteArray, QRect, QString, WidgetAttribute, SignalOfQString, SignalOfInt, q_abstract_animation, SignalNoArgs, CursorShape
     };
-    use qt_gui::{QPixmap, SignalOfQWindow, QCursor, QColor};
-    use qt_widgets::{
-        QAction, QApplication, QLineEdit, QMenu, QMessageBox, QPushButton, QTableWidget,
-        QTableWidgetItem, QVBoxLayout, QWidget, SlotOfQPoint, SlotOfQTableWidgetItemQTableWidgetItem,
-        QFrame, QHBoxLayout, QLabel, QLayout, QGraphicsDropShadowEffect, QGraphicsBlurEffect, QStackedLayout
+    use qt_gui::{QPixmap, QCursor, QColor};
+    use qt_widgets::{ QPushButton,
+         QVBoxLayout, QWidget,
+        QFrame, QHBoxLayout, QLabel,  QGraphicsDropShadowEffect, QGraphicsBlurEffect, QStackedLayout
     };
-    use signals2::Connect10;
     
     use std::rc::Rc;
 
@@ -42,12 +40,6 @@ pub mod notifications {
         blur_animation: QBox<QPropertyAnimation>,
         exit_animation_group: QBox<QSequentialAnimationGroup>,
         parallel_animation: QBox<QParallelAnimationGroup>,
-        // Layout
-        frame: QBox<QFrame>,
-        vertical_layout: QBox<QVBoxLayout>,
-        title_layout: QBox<QHBoxLayout>,
-        body_layout: QBox<QHBoxLayout>,
-        vertical_body_layout: QBox<QVBoxLayout>,
         // Content
         icon_label: QBox<QLabel>,
         app_name_label: QBox<QLabel>,
@@ -257,11 +249,6 @@ pub mod notifications {
                     blur_animation,
                     exit_animation_group,
                     parallel_animation,
-                    frame,
-                    vertical_layout,
-                    title_layout,
-                    body_layout,
-                    vertical_body_layout,
                     icon_label,
                     app_name_label,
                     image_label,
@@ -439,34 +426,10 @@ pub mod notifications {
         }
 
         #[slot(SlotOfBool)]
-        unsafe fn on_button_clicked(self: &Rc<Self>, clicked: bool) {
+        unsafe fn on_button_clicked(self: &Rc<Self>, _clicked: bool) {
             println!("Clicked");
             self.close_signal.emit(&qs(self.widget.win_id().to_string()));
             self.action_signal.emit(self.notification_id as i32);
-        }
-
-
-        #[slot(SlotOfQTableWidgetItemQTableWidgetItem)]
-        unsafe fn on_table_current_item_changed(
-            self: &Rc<Self>,
-            current: Ptr<QTableWidgetItem>,
-            previous: Ptr<QTableWidgetItem>,
-        ) {
-            if !previous.is_null() {
-                let font = previous.font();
-                font.set_bold(false);
-                previous.set_font(&font);
-            }
-            if !current.is_null() {
-                let font = current.font();
-                font.set_bold(true);
-                current.set_font(&font);
-            }
-        }
-
-        #[slot(SlotOfQPoint)]
-        unsafe fn on_table_context_menu_requested(self: &Rc<Self>, pos: Ref<QPoint>) {
-            
         }
     }
 }
