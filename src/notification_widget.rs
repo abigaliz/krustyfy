@@ -81,7 +81,7 @@ pub mod notifications {
                     WindowType::Tool |
                     WindowType::BypassWindowManagerHint);
 
-                overlay.set_window_opacity(1.0);
+                overlay.set_window_opacity(0.0);
 
                 let cursor = QCursor::new();
                 cursor.set_shape(CursorShape::PointingHandCursor);

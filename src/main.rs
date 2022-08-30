@@ -144,7 +144,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     QApplication::init(|_| unsafe {
 
-        let mut spawner = NotificationSpawner::new(action_sender);
+        let spawner = NotificationSpawner::new(action_sender);
 
         spawner.int_timer();
 
