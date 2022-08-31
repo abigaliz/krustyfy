@@ -8,7 +8,7 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{QString, SignalOfQString, ConnectionType, SignalOfQVariant};
+use qt_core::{SignalOfQString, ConnectionType, SignalOfQVariant};
 use qt_widgets::QApplication;
 
 mod notification_widget;
@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let spawner = NotificationSpawner::new(action_sender);
 
-        spawner.int_timer();
+        spawner.init();
 
         let notitification_signal = SignalOfQVariant::new();
 

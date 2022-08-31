@@ -1,12 +1,12 @@
 pub mod notifications {
     use std::rc::Rc;
 
-    use cpp_core::{CppBox, Ptr, StaticUpcast};
+    use cpp_core::{CppBox, Ptr, StaticUpcast, Ref, CppDeletable};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
     use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
-                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfBool, SlotOfInt, WidgetAttribute, WindowType
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfBool, SlotOfInt, WidgetAttribute, WindowType, SlotOfQString, ConnectionType, AsReceiver, q_meta_object::Connection, QTimer
     };
     use qt_gui::{QColor, QCursor, QPixmap};
     use qt_widgets::{QFrame,
@@ -46,16 +46,16 @@ pub mod notifications {
         image_label: QBox<QLabel>,
         title_label: QBox<QLabel>,
         body_label: QBox<QLabel>,
-        close_signal: QBox<SignalOfQString>,
+        close_signal: Ref<SignalOfQString>,
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
-        action_signal: QBox<SignalOfInt>,
         action_button: QBox<QPushButton>,
         notification_id: u32,
         pub freeze_signal: QBox<SignalNoArgs>,
         pub unfreeze_signal: QBox<SignalNoArgs>,
         overlay: QBox<QWidget>,
-        frame_shadow: QBox<QGraphicsDropShadowEffect>
+        frame_shadow: QBox<QGraphicsDropShadowEffect>,
+        action_signal: Ref<SignalOfInt>,
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -65,7 +65,7 @@ pub mod notifications {
     }
 
     impl NotificationWidget {
-        pub fn new(close_signal: QBox<SignalOfQString>, action_signal: QBox<SignalOfInt>, notification_id: u32) -> Rc<NotificationWidget> {
+        pub fn new(close_signal: &QBox<SignalOfQString>, action_signal: &QBox<SignalOfInt>, notification_id: u32) -> Rc<NotificationWidget> {
             unsafe {
                 // Set the notification widget
                 let widget = QWidget::new_0a();
@@ -80,6 +80,8 @@ pub mod notifications {
                     WindowType::WindowStaysOnTopHint |
                     WindowType::Tool |
                     WindowType::BypassWindowManagerHint);
+
+                overlay.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
 
                 overlay.set_window_opacity(0.0);
 
@@ -146,7 +148,7 @@ pub mod notifications {
                 frame.set_frame_shape(qt_widgets::q_frame::Shape::StyledPanel);
                 frame.set_frame_shadow(qt_widgets::q_frame::Shadow::Raised);
 
-                let frame_shadow = QGraphicsDropShadowEffect::new_0a();
+                let frame_shadow = QGraphicsDropShadowEffect::new_1a(&frame);
 
                 frame_shadow.set_blur_radius(10.0);
                 frame_shadow.set_x_offset(1.0);
@@ -191,30 +193,35 @@ pub mod notifications {
 
                 // Set up content
                 let icon_label = QLabel::new();
+                icon_label.set_parent(&widget);
 
                 icon_label.set_maximum_size_2a(ICON_SIZE, ICON_SIZE);
 
                 icon_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
 
                 let app_name_label = QLabel::new();
+                app_name_label.set_parent(&widget);
 
                 app_name_label.set_text_format(qt_core::TextFormat::MarkdownText);
                 app_name_label.set_maximum_size_2a(350, 30);
                 app_name_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
 
                 let image_label = QLabel::new();
+                image_label.set_parent(&widget);
 
                 image_label.set_maximum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
                 image_label.set_minimum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
                 image_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0); border-style: none; border-radius: 20px;"));
 
                 let title_label = QLabel::new();
+                title_label.set_parent(&widget);
 
                 title_label.set_maximum_size_2a(300, 20);
                 title_label.set_text_format(qt_core::TextFormat::MarkdownText);
 
 
                 let body_label = QLabel::new();
+                body_label.set_parent(&widget);
 
                 body_label.set_alignment(
                     qt_core::AlignmentFlag::AlignLeading | 
@@ -243,6 +250,9 @@ pub mod notifications {
             
                 widget.show();
 
+                let close = close_signal.as_ref().unwrap();
+                let action = action_signal.as_ref().unwrap();
+
                 let this = Rc::new(Self {
                     widget,
                     entry_animation,
@@ -255,16 +265,16 @@ pub mod notifications {
                     image_label,
                     title_label,
                     body_label,
-                    close_signal,
+                    close_signal: close,
                     animate_entry_signal,
                     blur_effect,
-                    action_signal,
+                    action_signal: action,
                     action_button,
                     notification_id,
                     freeze_signal,
                     unfreeze_signal,
                     overlay,
-                    frame_shadow
+                    frame_shadow,
                 });
                 this.init();
                 this.animate_exit();
@@ -397,6 +407,9 @@ pub mod notifications {
         unsafe fn on_close(self: &Rc<Self>) {
             self.close_signal.emit(&qs(self.widget.win_id().to_string()));
             self.widget.close();
+            self.widget.window();
+            self.overlay.close();
+            self.overlay.window().close();
         }
 
         #[slot(SlotNoArgs)]
@@ -423,8 +436,9 @@ pub mod notifications {
         #[slot(SlotOfBool)]
         unsafe fn on_button_clicked(self: &Rc<Self>, _clicked: bool) {
             println!("Clicked");
-            self.close_signal.emit(&qs(self.widget.win_id().to_string()));
+
             self.action_signal.emit(self.notification_id as i32);
+            self.close_signal.emit(&qs(self.widget.win_id().to_string()));
         }
     }
 }

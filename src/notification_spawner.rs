@@ -1,32 +1,24 @@
+use std::os::unix::prelude::ExitStatusExt;
 use std::{cell::RefMut, rc::Rc, slice::Iter};
 use std::cell::RefCell;
 
-use cpp_core::{Ptr, StaticUpcast, };
+use cpp_core::{Ptr, StaticUpcast, CppDeletable, };
+use qt_widgets::QApplication;
 use tokio::sync::mpsc::UnboundedSender;
 
 use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant, q_variant, QHashOfQStringQVariant};
 
 use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{self, NotificationWidget}};
 
-struct VecRefWrapper<'a, T: 'a> {
-    r: RefMut<'a, Vec<T>>
-}
-
-impl<'a, 'b: 'a, T: 'a> IntoIterator for &'b VecRefWrapper<'a, T> {
-    type Item = &'a T;
-    type IntoIter = Iter<'a, T>;
-
-    fn into_iter(self) -> Iter<'a, T> {
-        self.r.iter()
-    }
-}
-
 pub struct NotificationSpawner {
     widget_list: RefCell<Vec<Rc<notifications::NotificationWidget>>>,
     check_hover: QBox<SignalNoArgs>,
     qobject: QBox<QObject>,
     action_sender: UnboundedSender<i32>,
-    timer: QBox<QTimer>
+    timer: QBox<QTimer>,
+    reorder_signal: QBox<SignalNoArgs>,
+    action_signal: QBox<SignalOfInt>,
+    close_signal: QBox<SignalOfQString>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -48,19 +40,34 @@ impl NotificationSpawner {
 
             timer.timeout().connect(&check_hover);
 
+            let reorder_signal = SignalNoArgs::new();
+
+            let action_signal=  SignalOfInt::new();
+
+            let close_signal=  SignalOfQString::new();
+
             Rc::new(Self {
                 widget_list,
                 check_hover,
                 qobject,
                 action_sender,
-                timer
+                timer,
+                reorder_signal,
+                action_signal,
+                close_signal
             })
         }
     }
 
-    pub unsafe fn int_timer(self: &Rc<Self>)
+    pub unsafe fn init(self: &Rc<Self>)
     {
         self.timer.start_0a();
+
+        self.reorder_signal.connect_with_type(ConnectionType::QueuedConnection,&self.slot_on_reorder());
+
+        self.close_signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_widget_close());
+
+        self.action_signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_action());
     }
 
     #[slot(SlotOfQVariant)]
@@ -80,7 +87,9 @@ impl NotificationSpawner {
             notification.image_data, 
             notification.expire_timeout, 
             notification.notification_id,
-            notification.desktop_entry,)
+            notification.desktop_entry,);
+
+        self.qobject.dump_object_tree();
     }
 
     pub unsafe fn spawn_notification(
@@ -95,16 +104,8 @@ impl NotificationSpawner {
         _expire_timeout: i32,
         notification_id: u32,
         desktop_entry: String) {
-
-        let close_signal = SignalOfQString::new();
-
-        close_signal.connect_with_type( ConnectionType::QueuedConnection, &self.slot_on_widget_close());
-
-        let action_signal = SignalOfInt::new();
-
-        action_signal.connect_with_type( ConnectionType::QueuedConnection, &self.slot_on_action());
         
-        let _notification_widget = NotificationWidget::new(close_signal, action_signal, notification_id);
+        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id);
 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
@@ -119,23 +120,16 @@ impl NotificationSpawner {
             _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
         }
         else {
-            let pixmap = image_handler::parse_image(image_data.unwrap());
+            let pixmap = image_handler::parse_image(&image_data.unwrap());
             _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
-
-        _notification_widget.animate_entry((*self.widget_list.borrow()).len() as i32);
-
 
         (*self.widget_list.borrow_mut()).push(_notification_widget);
         self.reorder();
     }
 
     unsafe fn reorder(self : &Rc<Self>) {
-        let signal = SignalNoArgs::new();
-
-        signal.connect_with_type(ConnectionType::QueuedConnection,&self.slot_on_reorder());
-
-        signal.emit();
+        self.reorder_signal.emit();
     }
 
     #[slot(SlotNoArgs)]
@@ -167,6 +161,7 @@ impl NotificationSpawner {
             let widget = &list[i];
             if widget.widget.win_id().to_string() == closed_widget.to_std_string() {
                 notification_widget_index = i;
+                widget.widget.delete();
                 break;
             }
         }

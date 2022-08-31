@@ -34,7 +34,7 @@ pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
     QIcon::from_theme_1a(icon_name).pixmap_int(25)
 }
 
-pub unsafe fn parse_image(image_data: ImageData) -> CppBox<QPixmap> {
+pub unsafe fn parse_image(image_data: &ImageData) -> CppBox<QPixmap> {
     let pixmap = QPixmap::new();
 
     let image_format = if image_data.has_alpha {
