@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use cpp_core::{Ptr, StaticUpcast, };
 use tokio::sync::mpsc::UnboundedSender;
 
-use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString};
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant, q_variant, QHashOfQStringQVariant};
 
 use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{self, NotificationWidget}};
 
@@ -63,9 +63,12 @@ impl NotificationSpawner {
         self.timer.start_0a();
     }
 
-    #[slot(SlotOfQString)]
-    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QString>) {
-        let notification: Notification = serde_json::from_str(&serialized_notification.to_std_string()).unwrap();
+    #[slot(SlotOfQVariant)]
+    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QVariant>) {
+        //let notification: Notification = serde_json::from_str(&serialized_notification.to_std_string()).unwrap();
+        let notification_hash = serialized_notification.to_hash();
+
+        let notification = Notification::from_qvariant(&notification_hash);
 
         self.spawn_notification(
             notification.app_name, 
@@ -76,7 +79,8 @@ impl NotificationSpawner {
             notification.actions, 
             notification.image_data, 
             notification.expire_timeout, 
-            notification.notification_id);
+            notification.notification_id,
+            notification.desktop_entry,)
     }
 
     pub unsafe fn spawn_notification(
@@ -87,9 +91,10 @@ impl NotificationSpawner {
         summary: String, 
         body: String, 
         _actions: Vec<String>,
-        image_data: ImageData,
+        image_data: Option<ImageData>,
         _expire_timeout: i32,
-        notification_id: u32) {
+        notification_id: u32,
+        desktop_entry: String) {
 
         let close_signal = SignalOfQString::new();
 
@@ -103,18 +108,18 @@ impl NotificationSpawner {
 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
-        let icon =    if !image_data.desktop_entry.is_empty() {
-                                        image_handler::find_icon(&image_data.desktop_entry)
+        let icon =    if !desktop_entry.is_empty() {
+                                        image_handler::find_icon(&desktop_entry)
                                     }
                                     else {
                                         image_handler::find_icon(&app_name)
                                     };
 
-        if image_data.is_empty {
+        if image_data.is_none() {
             _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
         }
         else {
-            let pixmap = image_handler::parse_image(image_data);
+            let pixmap = image_handler::parse_image(image_data.unwrap());
             _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
 

@@ -8,7 +8,7 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{QString, SignalOfQString, ConnectionType};
+use qt_core::{QString, SignalOfQString, ConnectionType, SignalOfQVariant};
 use qt_widgets::QApplication;
 
 mod notification_widget;
@@ -42,7 +42,7 @@ impl NotificationHandler {
             desktop_entry = zbus::zvariant::Str::try_from(&hints["desktop-entry"]).ok().unwrap().to_string();
         }
 
-        let mut image_data = ImageData::empty();
+        let mut image_data: Option<ImageData> = None;
 
         if hints.contains_key("image-data") {
             let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap();
@@ -70,7 +70,7 @@ impl NotificationHandler {
                 data.push(u8::try_from(f).ok().unwrap());
             });
 
-            image_data = ImageData::new(width, height, rowstride, has_alpha, bits_per_sample, channels, data, desktop_entry);
+            image_data = Some(ImageData::new(width, height, rowstride, has_alpha, bits_per_sample, channels, data));
         }
         
 
@@ -82,7 +82,7 @@ impl NotificationHandler {
         }
 
         let notification = notification::Notification {
-            app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout, notification_id
+            app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout, notification_id, desktop_entry
         };
         
         self.sender.send(notification).await.unwrap();
@@ -148,16 +148,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         spawner.int_timer();
 
-        let notitification_signal = SignalOfQString::new();
+        let notitification_signal = SignalOfQVariant::new();
 
         notitification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_spawn_notification());
 
         let signal = notitification_signal.as_raw_ref();
         tokio::spawn(async move {
-            while let Some(message) = notification_receiver.recv().await {    
-                let json = serde_json::to_string(&message).unwrap();
+            while let Some(message) = notification_receiver.recv().await { 
     
-                signal.unwrap().emit(QString::from_std_str(json).as_ref());
+                signal.unwrap().emit(message.to_qvariant().as_ref());
             }
         });
 
