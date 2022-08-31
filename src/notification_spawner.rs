@@ -12,6 +12,7 @@ use crate::{image_handler, notification::{ImageData, Notification}, notification
 
 pub struct NotificationSpawner {
     widget_list: RefCell<Vec<Rc<notifications::NotificationWidget>>>,
+    test_list: RefCell<Vec<Rc<notifications::TestWidget>>>,
     check_hover: QBox<SignalNoArgs>,
     qobject: QBox<QObject>,
     action_sender: UnboundedSender<i32>,
@@ -33,6 +34,8 @@ impl NotificationSpawner {
             let qobject = QObject::new_0a();
 
             let widget_list = RefCell::new(Vec::new());
+            let test_list = RefCell::new(Vec::new());
+
             let timer = QTimer::new_0a();
             timer.set_interval(100);
 
@@ -48,6 +51,7 @@ impl NotificationSpawner {
 
             Rc::new(Self {
                 widget_list,
+                test_list,
                 check_hover,
                 qobject,
                 action_sender,
@@ -77,7 +81,7 @@ impl NotificationSpawner {
 
         let notification = Notification::from_qvariant(&notification_hash);
 
-        self.spawn_notification(
+         self.spawn_notification(
             notification.app_name, 
             notification.replaces_id, 
             notification.app_icon, 
@@ -88,8 +92,6 @@ impl NotificationSpawner {
             notification.expire_timeout, 
             notification.notification_id,
             notification.desktop_entry,);
-
-        self.qobject.dump_object_tree();
     }
 
     pub unsafe fn spawn_notification(
@@ -104,6 +106,10 @@ impl NotificationSpawner {
         _expire_timeout: i32,
         notification_id: u32,
         desktop_entry: String) {
+
+/*         let testwidget = notifications::TestWidget::new();
+        
+        (*self.test_list.borrow_mut()).push(testwidget); */
         
         let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id);
 

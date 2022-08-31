@@ -31,6 +31,30 @@ pub mod notifications {
     const HOVERED_NOTIFICATION_OPACITY: f32 = 0.2;
     const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
 
+    pub struct TestWidget {
+        widget: QBox<QWidget>,
+    }
+
+    impl TestWidget {
+        pub unsafe fn new() -> Rc<TestWidget> {
+            let widget = QWidget::new_0a();
+
+            widget.set_window_flags(
+                WindowType::WindowTransparentForInput |
+                WindowType::WindowStaysOnTopHint |
+                WindowType::X11BypassWindowManagerHint);
+
+            widget.show();
+
+            widget.close();
+
+            
+
+            Rc::new(Self {
+                widget
+            })
+        }
+    }
 
     pub struct NotificationWidget {
         pub widget: QBox<QWidget>,
@@ -78,7 +102,6 @@ pub mod notifications {
                 overlay.set_window_flags(
                     WindowType::FramelessWindowHint |
                     WindowType::WindowStaysOnTopHint |
-                    WindowType::Tool |
                     WindowType::BypassWindowManagerHint);
 
                 overlay.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
@@ -106,7 +129,6 @@ pub mod notifications {
                     WindowType::FramelessWindowHint |
                     WindowType::WindowTransparentForInput |
                     WindowType::WindowStaysOnTopHint |
-                    WindowType::Tool |
                     WindowType::BypassWindowManagerHint);
 
                 let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);

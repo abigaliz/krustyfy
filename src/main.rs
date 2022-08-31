@@ -9,7 +9,7 @@ use zvariant::Value;
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
 use qt_core::{SignalOfQString, ConnectionType, SignalOfQVariant};
-use qt_widgets::QApplication;
+use qt_widgets::{QApplication, QMainWindow};
 
 mod notification_widget;
 mod notification_spawner;
@@ -142,7 +142,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    QApplication::init(|_| unsafe {
+    QApplication::init(|app| unsafe {
+
+        let main_window = QMainWindow::new_0a();
+
+        main_window.show();
 
         let spawner = NotificationSpawner::new(action_sender);
 
