@@ -76,7 +76,7 @@ pub mod notifications {
 
                 let topleft = main_window.screen().geometry().top_left();
                 // Set the notification widget
-                let widget = QDialog::new_1a(main_window);
+                let widget = QDialog::new_0a();
                 widget.set_object_name(&qs(&guid));
 
                 // Set the default action overlay
@@ -123,13 +123,13 @@ pub mod notifications {
 
                 widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
                 widget.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
+                widget.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
 
                 let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);
                 blur_effect.set_object_name(&qs("blur_effect"));
 
                 widget.set_graphics_effect(&blur_effect);
                 blur_effect.set_blur_radius(0.0);
-
 
                 widget.set_geometry_4a(topleft.x(), 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
 

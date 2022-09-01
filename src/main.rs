@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             WindowType::Tool);
 
         let screen = QApplication::desktop().screen_1a(-1);
-        main_window.set_geometry_4a(screen.x() + 200, screen.y() + 200, 200, 200);
+        main_window.set_geometry_4a(screen.x() + 200, screen.y() + 200, 0, 0);
 
         main_window.set_window_opacity(0.0);
 
