@@ -73,6 +73,12 @@ impl NotificationHandler {
 
             image_data = Some(ImageData::new(width, height, rowstride, has_alpha, bits_per_sample, channels, data));
         }
+
+        let mut image_path: Option<String> = None;
+
+        if hints.contains_key("image-path") {
+            image_path = Some(zbus::zvariant::Str::try_from(&hints["image-path"]).ok().unwrap().to_string())
+        }
         
 
         let mut notification_id = replaces_id;
@@ -83,7 +89,7 @@ impl NotificationHandler {
         }
 
         let notification = notification::Notification {
-            app_name, replaces_id, app_icon, summary, body, actions, image_data, expire_timeout, notification_id, desktop_entry
+            app_name, replaces_id, app_icon, summary, body, actions, image_data, image_path, expire_timeout, notification_id, desktop_entry
         };
         
         self.sender.send(notification).await.unwrap();

@@ -1,6 +1,6 @@
 use cpp_core::{CppBox, Ref};
 
-use qt_core::{QFileInfo, QString};
+use qt_core::{QFileInfo, QString, qs};
 use qt_gui::{QIcon, QImage, QPixmap};
 use qt_widgets::QFileIconProvider;
 
@@ -47,6 +47,15 @@ pub unsafe fn parse_image(image_data: &ImageData) -> CppBox<QPixmap> {
     let data = image_data.data.as_ptr();
 
     let qimage = QImage::from_uchar3_int_format2(data, image_data.width, image_data.height, image_data.rowstride, image_format);
+
+    pixmap.convert_from_image_1a(qimage.as_ref());
+    pixmap
+}
+
+pub unsafe fn load_image(image_path: String) -> CppBox<QPixmap> {
+    let pixmap = QPixmap::new();
+
+    let qimage = QImage::from_q_string(&qs(image_path));
 
     pixmap.convert_from_image_1a(qimage.as_ref());
     pixmap

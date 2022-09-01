@@ -84,6 +84,7 @@ pub struct Notification {
     pub body: String, 
     pub actions: Vec<String>,
     pub image_data: Option<ImageData>,
+    pub image_path: Option<String>,
     pub expire_timeout: i32,
     pub notification_id: u32,
     pub desktop_entry: String,
@@ -109,6 +110,12 @@ impl Notification {
             image_data = Some(ImageData::from_qvariant(&image_data_hash));
         }
 
+        let mut image_path: Option<String> = None;
+
+        if hash.contains(&qs("image_path")) {
+            image_path = Some(hash.value_1a(&qs("image_path")).to_string().to_std_string());
+        }
+
         Notification {
             app_name,
             replaces_id,
@@ -117,6 +124,7 @@ impl Notification {
             body,
             actions,
             image_data,
+            image_path,
             expire_timeout,
             notification_id,
             desktop_entry
@@ -148,6 +156,12 @@ impl Notification {
             let image_data = QVariant::from_q_hash_of_q_string_q_variant(&self.image_data.as_ref().unwrap().to_qvariant());
             hash.insert(&qs("image_data"), &image_data);
         }
+
+        if self.image_path.is_some() {
+            let image_path = QVariant::from_q_string(&qs(&self.image_path.as_ref().unwrap()));
+            hash.insert(&qs("image_path"), &image_path);
+        }
+
         QVariant::from_q_hash_of_q_string_q_variant(&hash)
     }
 }

@@ -86,6 +86,7 @@ impl NotificationSpawner {
             notification.body, 
             notification.actions, 
             notification.image_data, 
+            notification.image_path,
             notification.expire_timeout, 
             notification.notification_id,
             notification.desktop_entry);
@@ -100,6 +101,7 @@ impl NotificationSpawner {
         body: String, 
         _actions: Vec<String>,
         image_data: Option<ImageData>,
+        image_path: Option<String>,
         _expire_timeout: i32,
         notification_id: u32,
         desktop_entry: String) {
@@ -117,11 +119,17 @@ impl NotificationSpawner {
                                         image_handler::find_icon(&app_name)
                                     };
 
-        if image_data.is_none() {
+        if image_data.is_none() && image_path.is_none() {
             _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
         }
         else {
-            let pixmap = image_handler::parse_image(&image_data.unwrap());
+            let pixmap = if image_data.is_some() {
+                image_handler::parse_image(&image_data.unwrap())
+            }
+            else {
+                image_handler::load_image(image_path.unwrap())
+            };
+            
             _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
 
