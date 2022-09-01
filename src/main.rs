@@ -2,14 +2,15 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+
 use tokio::{self, sync::mpsc::{self, Sender}};
 use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{QString, SignalOfQString, ConnectionType, SignalOfQVariant};
-use qt_widgets::QApplication;
+use qt_core::{ConnectionType, SignalOfQVariant};
+use qt_widgets::{QApplication};
 
 mod notification_widget;
 mod notification_spawner;
@@ -142,21 +143,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    QApplication::init(|_| unsafe {
-
+    QApplication::init(|_app| unsafe {
         let spawner = NotificationSpawner::new(action_sender);
 
-        spawner.int_timer();
+        spawner.init();
 
         let notitification_signal = SignalOfQVariant::new();
 
         notitification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_spawn_notification());
 
-        let signal = notitification_signal.as_raw_ref();
+        let signal = notitification_signal.as_raw_ref().unwrap();
         tokio::spawn(async move {
             while let Some(message) = notification_receiver.recv().await { 
     
-                signal.unwrap().emit(message.to_qvariant().as_ref());
+                signal.emit(message.to_qvariant().as_ref());
             }
         });
 

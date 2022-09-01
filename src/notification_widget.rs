@@ -1,17 +1,17 @@
 pub mod notifications {
     use std::rc::Rc;
 
-    use cpp_core::{CppBox, Ptr, StaticUpcast};
+    use cpp_core::{CppBox, Ptr, StaticUpcast, Ref};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
     use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
-                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfBool, SlotOfInt, WidgetAttribute, WindowType
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType
     };
     use qt_gui::{QColor, QCursor, QPixmap};
     use qt_widgets::{QFrame,
                      QGraphicsBlurEffect, QGraphicsDropShadowEffect,
-                     QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QWidget
+                     QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QDialog, QApplication
     };
 
     const NOTIFICATION_HEIGHT: i32 = 143;
@@ -32,8 +32,11 @@ pub mod notifications {
     const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
 
 
+    
+    
+    #[derive(Debug)]
     pub struct NotificationWidget {
-        pub widget: QBox<QWidget>,
+        pub widget: QBox<QDialog>,
         // Animations
         entry_animation: QBox<QPropertyAnimation>,
         exit_animation: QBox<QPropertyAnimation>,
@@ -46,16 +49,17 @@ pub mod notifications {
         image_label: QBox<QLabel>,
         title_label: QBox<QLabel>,
         body_label: QBox<QLabel>,
-        close_signal: QBox<SignalOfQString>,
+        close_signal: Ref<SignalOfQString>,
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
-        action_signal: QBox<SignalOfInt>,
         action_button: QBox<QPushButton>,
         notification_id: u32,
         pub freeze_signal: QBox<SignalNoArgs>,
         pub unfreeze_signal: QBox<SignalNoArgs>,
-        overlay: QBox<QWidget>,
-        frame_shadow: QBox<QGraphicsDropShadowEffect>
+        pub overlay: QBox<QDialog>,
+        frame_shadow: QBox<QGraphicsDropShadowEffect>,
+        action_signal: Ref<SignalOfInt>,
+        guid: String,
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -65,21 +69,31 @@ pub mod notifications {
     }
 
     impl NotificationWidget {
-        pub fn new(close_signal: QBox<SignalOfQString>, action_signal: QBox<SignalOfInt>, notification_id: u32) -> Rc<NotificationWidget> {
+        pub fn new(
+            close_signal: &QBox<SignalOfQString>, 
+            action_signal: &QBox<SignalOfInt>, 
+            notification_id: u32, 
+            guid: String) -> Rc<NotificationWidget> {
             unsafe {
+
+                let topleft = QApplication::desktop().screen_1a(-1).geometry().top_left();
                 // Set the notification widget
-                let widget = QWidget::new_0a();
+                let widget = QDialog::new_0a();
+                widget.set_object_name(&qs(&guid));
 
                 // Set the default action overlay
-                let overlay = QWidget::new_0a();
+                let overlay = QDialog::new_1a(&widget);
+                overlay.set_object_name(&qs("overlay"));
 
-                overlay.set_geometry_4a(0, 0, 400, 400);
+                overlay.set_geometry_4a(topleft.x(), 0, 400, 400);
 
                 overlay.set_window_flags(
+                    WindowType::WindowStaysOnTopHint | 
+                    WindowType::Tool | 
                     WindowType::FramelessWindowHint |
-                    WindowType::WindowStaysOnTopHint |
-                    WindowType::Tool |
-                    WindowType::BypassWindowManagerHint);
+                    WindowType::X11BypassWindowManagerHint);
+
+                overlay.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
 
                 overlay.set_window_opacity(0.0);
 
@@ -89,34 +103,37 @@ pub mod notifications {
                 overlay.set_cursor(cursor.as_ref());
 
                 let overlay_layout = QStackedLayout::new();
+                overlay_layout.set_object_name(&qs("overlay_layout"));
                 overlay_layout.set_geometry(&QRect::from_4_int(0, 0, 400, 300));
                 overlay_layout.set_margin(0);
                 overlay_layout.set_spacing(0);
                 overlay.set_layout(overlay_layout.as_ptr());
         
                 let action_button = QPushButton::new();
+                action_button.set_object_name(&qs("action_button"));
                 action_button.set_geometry_4a(0, 0, 400, 300);
                 
                 overlay_layout.add_widget(&action_button);
                 
                 // Set flags
                 widget.set_window_flags(
-                    WindowType::FramelessWindowHint |
                     WindowType::WindowTransparentForInput |
-                    WindowType::WindowStaysOnTopHint |
-                    WindowType::Tool |
-                    WindowType::BypassWindowManagerHint);
+                    WindowType::WindowStaysOnTopHint | 
+                    WindowType::Tool | 
+                    WindowType::FramelessWindowHint |
+                    WindowType::X11BypassWindowManagerHint);
+
+                widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+                widget.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
+                widget.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
 
                 let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);
+                blur_effect.set_object_name(&qs("blur_effect"));
 
                 widget.set_graphics_effect(&blur_effect);
                 blur_effect.set_blur_radius(0.0);
 
-                widget.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
-                widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
-                widget.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
-
-                widget.set_geometry_4a(0, 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
+                widget.set_geometry_4a(topleft.x(), 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
 
                 widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
 
@@ -131,14 +148,20 @@ pub mod notifications {
                 opacity_property.add_assign_q_string(&qs("windowOpacity"));
 
                 let entry_animation = QPropertyAnimation::new_2a(&widget, &y_property);
+                entry_animation.set_object_name(&qs("entry_animation"));
                 let exit_animation = QPropertyAnimation::new_2a(&widget, &opacity_property);
+                exit_animation.set_object_name(&qs("exit_animation"));
                 let blur_animation = QPropertyAnimation::new_2a(&blur_effect, &blur_radius_property);
+                blur_animation.set_object_name(&qs("blur_animation"));
                 let exit_animation_group = QSequentialAnimationGroup::new_1a(&widget);
+                exit_animation_group.set_object_name(&qs("exit_animation_group"));
                 let parallel_animation = QParallelAnimationGroup::new_1a(&widget);
+                parallel_animation.set_object_name(&qs("parallel_animation"));
 
 
                 // Set up layout
                 let frame = QFrame::new_1a(&widget);
+                frame.set_object_name(&qs("frame"));
 
                 frame.set_geometry_4a(10, 10, 301, 121);
                 frame.set_style_sheet(&qs("border-radius: 15px;background-color: black;border-style:none;"));
@@ -146,7 +169,8 @@ pub mod notifications {
                 frame.set_frame_shape(qt_widgets::q_frame::Shape::StyledPanel);
                 frame.set_frame_shadow(qt_widgets::q_frame::Shadow::Raised);
 
-                let frame_shadow = QGraphicsDropShadowEffect::new_0a();
+                let frame_shadow = QGraphicsDropShadowEffect::new_1a(&frame);
+                frame_shadow.set_object_name(&qs("frame_shadow"));
 
                 frame_shadow.set_blur_radius(10.0);
                 frame_shadow.set_x_offset(1.0);
@@ -158,6 +182,7 @@ pub mod notifications {
                 frame.set_mid_line_width(3);
 
                 let vertical_layout = QVBoxLayout::new_1a(&frame);
+                vertical_layout.set_object_name(&qs("vertical_layout"));
 
                 vertical_layout.set_geometry(&QRect::from_4_int(0, 0, 301, 121));
                 vertical_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetMaximumSize);
@@ -166,12 +191,14 @@ pub mod notifications {
 
 
                 let title_layout = QHBoxLayout::new_0a();
+                title_layout.set_object_name(&qs("title_layout"));
 
                 title_layout.set_spacing(6);
                 title_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetMinAndMaxSize);
                 title_layout.set_contents_margins_4a(2, 2, -1, -1);
 
                 let body_layout = QHBoxLayout::new_0a();
+                body_layout.set_object_name(&qs("body_layout"));
 
                 body_layout.set_spacing(5);
                 body_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetNoConstraint);
@@ -179,6 +206,7 @@ pub mod notifications {
                 body_layout.set_stretch(0, 1);
 
                 let vertical_body_layout = QVBoxLayout::new_0a();
+                vertical_body_layout.set_object_name(&qs("vertical_body_layout"));
 
                 vertical_body_layout.set_stretch(1, 1);
                 vertical_body_layout.set_spacing(2);
@@ -191,30 +219,40 @@ pub mod notifications {
 
                 // Set up content
                 let icon_label = QLabel::new();
+                icon_label.set_object_name(&qs("icon_label"));
+                icon_label.set_parent(&widget);
 
                 icon_label.set_maximum_size_2a(ICON_SIZE, ICON_SIZE);
 
                 icon_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
 
                 let app_name_label = QLabel::new();
+                app_name_label.set_object_name(&qs("app_name_label"));
+                app_name_label.set_parent(&widget);
 
                 app_name_label.set_text_format(qt_core::TextFormat::MarkdownText);
                 app_name_label.set_maximum_size_2a(350, 30);
                 app_name_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
 
                 let image_label = QLabel::new();
+                image_label.set_object_name(&qs("image_label"));
+                image_label.set_parent(&widget);
 
                 image_label.set_maximum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
                 image_label.set_minimum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
                 image_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0); border-style: none; border-radius: 20px;"));
 
                 let title_label = QLabel::new();
+                title_label.set_object_name(&qs("title_label"));
+                title_label.set_parent(&widget);
 
                 title_label.set_maximum_size_2a(300, 20);
                 title_label.set_text_format(qt_core::TextFormat::MarkdownText);
 
 
                 let body_label = QLabel::new();
+                body_label.set_object_name(&qs("body_label"));
+                body_label.set_parent(&widget);
 
                 body_label.set_alignment(
                     qt_core::AlignmentFlag::AlignLeading | 
@@ -242,6 +280,10 @@ pub mod notifications {
                 let unfreeze_signal = SignalNoArgs::new();
             
                 widget.show();
+                overlay.show();
+
+                let close = close_signal.as_ref().unwrap();
+                let action = action_signal.as_ref().unwrap();
 
                 let this = Rc::new(Self {
                     widget,
@@ -255,16 +297,17 @@ pub mod notifications {
                     image_label,
                     title_label,
                     body_label,
-                    close_signal,
+                    close_signal: close,
                     animate_entry_signal,
                     blur_effect,
-                    action_signal,
+                    action_signal: action,
                     action_button,
                     notification_id,
                     freeze_signal,
                     unfreeze_signal,
                     overlay,
-                    frame_shadow
+                    frame_shadow,
+                    guid
                 });
                 this.init();
                 this.animate_exit();
@@ -395,14 +438,13 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_close(self: &Rc<Self>) {
-            self.close_signal.emit(&qs(self.widget.win_id().to_string()));
-            self.widget.close();
+            self.close_signal.emit(&qs(&self.guid));
         }
 
         #[slot(SlotNoArgs)]
         unsafe fn on_freeze(self: &Rc<Self>) {
             self.overlay.set_geometry_1a(self.widget.geometry());
-            self.overlay.show();
+            self.overlay.set_visible(true);
             if self.exit_animation_group.state() == q_abstract_animation::State::Paused {
                 return;
             }
@@ -413,18 +455,20 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_unfreeze(self: &Rc<Self>) {
-            self.overlay.hide();
+            self.overlay.set_visible(false);
             if self.exit_animation_group.state() != q_abstract_animation::State::Paused {
                 return;
             }
             self.exit_animation_group.resume();
         }
 
-        #[slot(SlotOfBool)]
-        unsafe fn on_button_clicked(self: &Rc<Self>, _clicked: bool) {
+        #[slot(SlotNoArgs)]
+        unsafe fn on_button_clicked(self: &Rc<Self>) {
             println!("Clicked");
-            self.close_signal.emit(&qs(self.widget.win_id().to_string()));
+
             self.action_signal.emit(self.notification_id as i32);
+            self.on_close();
+            print!("wanting to close {}", self.widget.win_id().to_string());
         }
     }
 }
