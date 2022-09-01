@@ -2,14 +2,15 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+
 use tokio::{self, sync::mpsc::{self, Sender}};
 use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{SignalOfQString, ConnectionType, SignalOfQVariant};
-use qt_widgets::{QApplication, QMainWindow};
+use qt_core::{ConnectionType, SignalOfQVariant, WindowType, SlotNoArgs};
+use qt_widgets::{QApplication, QMainWindow, QPushButton};
 
 mod notification_widget;
 mod notification_spawner;
@@ -142,13 +143,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    QApplication::init(|app| unsafe {
+    QApplication::init(|_app| unsafe {
 
         let main_window = QMainWindow::new_0a();
 
+        main_window.set_window_flags(
+            WindowType::WindowStaysOnTopHint | 
+            WindowType::WindowDoesNotAcceptFocus |
+            WindowType::WindowTransparentForInput |
+            WindowType::Tool);
+
+        let screen = QApplication::desktop().screen_1a(-1);
+        main_window.set_geometry_4a(screen.x() + 200, screen.y() + 200, 200, 200);
+
+        main_window.set_window_opacity(0.0);
+
+        let debug_button = QPushButton::new();
+
+        main_window.layout().add_widget(&debug_button);
+
+        debug_button.clicked().connect(&SlotNoArgs::new(&main_window, move || {
+            debug_button.parent().dump_object_tree();
+        }));
+
         main_window.show();
 
-        let spawner = NotificationSpawner::new(action_sender);
+        let spawner = NotificationSpawner::new(action_sender, main_window);
 
         spawner.init();
 

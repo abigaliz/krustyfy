@@ -1,40 +1,38 @@
-use std::os::unix::prelude::ExitStatusExt;
-use std::{cell::RefMut, rc::Rc, slice::Iter};
-use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Mutex;
 
-use cpp_core::{Ptr, StaticUpcast, CppDeletable, };
-use qt_widgets::QApplication;
+use cpp_core::{Ptr, StaticUpcast, };
+
+use linked_hash_map::LinkedHashMap;
+use qt_widgets::{QMainWindow};
 use tokio::sync::mpsc::UnboundedSender;
 
-use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant, q_variant, QHashOfQStringQVariant};
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
+use uuid::Uuid;
 
-use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{self, NotificationWidget}};
+use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{NotificationWidget}};
 
 pub struct NotificationSpawner {
-    widget_list: RefCell<Vec<Rc<notifications::NotificationWidget>>>,
-    test_list: RefCell<Vec<Rc<notifications::TestWidget>>>,
+    widget_list: Mutex<LinkedHashMap<String, Rc<NotificationWidget>>>,
     check_hover: QBox<SignalNoArgs>,
-    qobject: QBox<QObject>,
     action_sender: UnboundedSender<i32>,
     timer: QBox<QTimer>,
     reorder_signal: QBox<SignalNoArgs>,
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
+    main_window: QBox<QMainWindow>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
     unsafe fn static_upcast(ptr: Ptr<Self>) -> Ptr<QObject> {
-        ptr.qobject.as_ptr().static_upcast()
+        ptr.main_window.as_ptr().static_upcast()
     }
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: UnboundedSender<i32>, main_window: QBox<QMainWindow>) -> Rc<NotificationSpawner> {
         unsafe {
-            let qobject = QObject::new_0a();
-
-            let widget_list = RefCell::new(Vec::new());
-            let test_list = RefCell::new(Vec::new());
+            let widget_list = Mutex::new(LinkedHashMap::new());
 
             let timer = QTimer::new_0a();
             timer.set_interval(100);
@@ -51,14 +49,13 @@ impl NotificationSpawner {
 
             Rc::new(Self {
                 widget_list,
-                test_list,
                 check_hover,
-                qobject,
                 action_sender,
                 timer,
                 reorder_signal,
                 action_signal,
-                close_signal
+                close_signal,
+                main_window
             })
         }
     }
@@ -76,7 +73,6 @@ impl NotificationSpawner {
 
     #[slot(SlotOfQVariant)]
     pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QVariant>) {
-        //let notification: Notification = serde_json::from_str(&serialized_notification.to_std_string()).unwrap();
         let notification_hash = serialized_notification.to_hash();
 
         let notification = Notification::from_qvariant(&notification_hash);
@@ -91,7 +87,9 @@ impl NotificationSpawner {
             notification.image_data, 
             notification.expire_timeout, 
             notification.notification_id,
-            notification.desktop_entry,);
+            notification.desktop_entry);
+
+        self.main_window.dump_object_tree();
     }
 
     pub unsafe fn spawn_notification(
@@ -107,11 +105,9 @@ impl NotificationSpawner {
         notification_id: u32,
         desktop_entry: String) {
 
-/*         let testwidget = notifications::TestWidget::new();
-        
-        (*self.test_list.borrow_mut()).push(testwidget); */
-        
-        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id);
+        let guid = Uuid::new_v4().to_string();
+
+        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id, &self.main_window, guid.clone());
 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
@@ -130,7 +126,9 @@ impl NotificationSpawner {
             _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
 
-        (*self.widget_list.borrow_mut()).push(_notification_widget);
+        _notification_widget.animate_entry_signal.emit(0 as i32);
+
+        self.widget_list.lock().unwrap().insert(guid, _notification_widget);
         self.reorder();
     }
 
@@ -140,15 +138,14 @@ impl NotificationSpawner {
 
     #[slot(SlotNoArgs)]
     unsafe fn on_reorder(self : &Rc<Self>) {
-        let list = self.widget_list.borrow();
+        let list = self.widget_list.lock().unwrap();
 
-        for i in 0..list.len() {
+        let mut counter = 0;
+        for i in list.keys() {
             let widget = &list[i];
 
-            let topleft = widget.widget.screen().geometry().top_left();
-
-            widget.widget.set_geometry_4a(topleft.x(), widget.widget.y(), widget.widget.width(), widget.widget.height());
-            widget.animate_entry_signal.emit(i as i32);
+            widget.animate_entry_signal.emit(counter as i32);
+            counter += 1;
         }
     }
 
@@ -159,21 +156,13 @@ impl NotificationSpawner {
 
     #[slot(SlotOfQString)]
     unsafe fn on_widget_close(self : &Rc<Self>, closed_widget: cpp_core::Ref<QString>) {    
-        let mut notification_widget_index: usize = 0;
+        let mut list = self.widget_list.lock().unwrap();
 
-        let mut list = self.widget_list.borrow_mut();
+        let widget = &list[&closed_widget.to_std_string()];
+        widget.widget.close();
 
-        for i in 0..&list.len() - 1 {
-            let widget = &list[i];
-            if widget.widget.win_id().to_string() == closed_widget.to_std_string() {
-                notification_widget_index = i;
-                widget.widget.delete();
-                break;
-            }
-        }
+        list.remove(&closed_widget.to_std_string());
 
-        list.remove(notification_widget_index);
-
-        self.reorder();
+        self.reorder(); 
     }
 }
