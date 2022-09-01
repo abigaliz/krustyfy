@@ -120,7 +120,7 @@ impl NotificationSpawner {
                                     };
 
         if image_data.is_none() && image_path.is_none() {
-            _notification_widget.set_content(qs(app_name), qs(summary), qs(body), icon);
+            _notification_widget.set_content_no_image(qs(app_name), qs(summary), qs(body), icon);
         }
         else {
             let pixmap = if image_data.is_some() {
@@ -132,8 +132,6 @@ impl NotificationSpawner {
             
             _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
-
-        _notification_widget.animate_entry_signal.emit(0 as i32);
 
         self.widget_list.lock().unwrap().insert(guid, _notification_widget);
 
@@ -149,10 +147,8 @@ impl NotificationSpawner {
         let list = self.widget_list.lock().unwrap();
 
         let mut counter = 0;
-        for i in list.keys() {
-            let widget = &list[i];
-
-            widget.animate_entry_signal.emit(counter as i32);
+        for widget in list.values() {
+            widget.animate_entry_signal.emit(counter);
             counter += 1;
         }
     }

@@ -6,6 +6,8 @@ use qt_widgets::QFileIconProvider;
 
 use crate::notification::ImageData;
 
+const DEFAULT_ICON: &str = "notifications";
+
 pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
     let desktop_entry_lowercase = desktop_entry.as_str().to_lowercase();
 
@@ -26,12 +28,16 @@ pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
 
         let icon_provider = QFileIconProvider::new();
 
-        let icon = icon_provider.icon_q_file_info(info.as_ref());
+        if info.exists_0a() {
+            let icon = icon_provider.icon_q_file_info(info.as_ref());
 
-        return icon.pixmap_int(25);
+            return icon.pixmap_int(64);
+        }
+
+        return QIcon::from_theme_1a(QString::from_std_str(DEFAULT_ICON).as_ref()).pixmap_int(64);
     }
 
-    QIcon::from_theme_1a(icon_name).pixmap_int(25)
+    QIcon::from_theme_1a(icon_name).pixmap_int(64)
 }
 
 pub unsafe fn parse_image(image_data: &ImageData) -> CppBox<QPixmap> {

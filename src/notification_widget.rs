@@ -6,9 +6,9 @@ pub mod notifications {
 
     use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
-                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode
     };
-    use qt_gui::{QColor, QCursor, QPixmap};
+    use qt_gui::{QColor, QCursor, QPixmap, QPainter, q_painter::RenderHint, QPainterPath};
     use qt_widgets::{QFrame,
                      QGraphicsBlurEffect, QGraphicsDropShadowEffect,
                      QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QDialog, QApplication
@@ -24,15 +24,12 @@ pub mod notifications {
     const NOTIFICATION_EXIT_DURATION: i32 = 600;
 
     const DEFAULT_NOTIFICATION_BLUR_RADIUS: f64 = 1.0;
-    const DISAPPEARING_NOTIFICATION_BLUR_RADIUS: i32 = 15;
+    const DISAPPEARING_NOTIFICATION_BLUR_RADIUS: f64 = 15.0;
 
-    const DEFAULT_NOTIFICATION_OPACITY: f32 = 0.8;
+    const DEFAULT_NOTIFICATION_OPACITY: f64 = 0.8;
 
-    const HOVERED_NOTIFICATION_OPACITY: f32 = 0.2;
+    const HOVERED_NOTIFICATION_OPACITY: f64 = 0.2;
     const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
-
-
-    
     
     #[derive(Debug)]
     pub struct NotificationWidget {
@@ -135,7 +132,7 @@ pub mod notifications {
 
                 widget.set_geometry_4a(topleft.x(), 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
 
-                widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
 
                 // Set animations
                 let y_property = QByteArray::new();
@@ -188,6 +185,7 @@ pub mod notifications {
                 vertical_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetMaximumSize);
                 vertical_layout.set_contents_margins_4a(0, 0, 0, 0);
                 vertical_layout.set_stretch(1, 3);
+                vertical_layout.set_spacing(0);
 
 
                 let title_layout = QHBoxLayout::new_0a();
@@ -196,21 +194,21 @@ pub mod notifications {
                 title_layout.set_spacing(6);
                 title_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetMinAndMaxSize);
                 title_layout.set_contents_margins_4a(2, 2, -1, -1);
+                title_layout.set_stretch(1, 1);
 
                 let body_layout = QHBoxLayout::new_0a();
                 body_layout.set_object_name(&qs("body_layout"));
 
                 body_layout.set_spacing(5);
                 body_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetNoConstraint);
-                body_layout.set_contents_margins_4a(5, 2, -1, 5);
+                body_layout.set_contents_margins_4a(5, -10, -1, 5);
                 body_layout.set_stretch(0, 1);
 
                 let vertical_body_layout = QVBoxLayout::new_0a();
                 vertical_body_layout.set_object_name(&qs("vertical_body_layout"));
-
                 vertical_body_layout.set_stretch(1, 1);
                 vertical_body_layout.set_spacing(2);
-                vertical_body_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetMinAndMaxSize);
+                vertical_body_layout.set_size_constraint(qt_widgets::q_layout::SizeConstraint::SetNoConstraint);
 
 
                 vertical_layout.add_layout_1a(&title_layout);
@@ -223,6 +221,7 @@ pub mod notifications {
                 icon_label.set_parent(&widget);
 
                 icon_label.set_maximum_size_2a(ICON_SIZE, ICON_SIZE);
+                icon_label.set_minimum_size_2a(ICON_SIZE, ICON_SIZE);
 
                 icon_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
 
@@ -230,9 +229,7 @@ pub mod notifications {
                 app_name_label.set_object_name(&qs("app_name_label"));
                 app_name_label.set_parent(&widget);
 
-                app_name_label.set_text_format(qt_core::TextFormat::MarkdownText);
-                app_name_label.set_maximum_size_2a(350, 30);
-                app_name_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0);border-style: none;"));
+                app_name_label.set_maximum_size_2a(300, 30);
 
                 let image_label = QLabel::new();
                 image_label.set_object_name(&qs("image_label"));
@@ -243,11 +240,11 @@ pub mod notifications {
                 image_label.set_style_sheet(&qs("background-color:rgba(255, 255, 255, 0); border-style: none; border-radius: 20px;"));
 
                 let title_label = QLabel::new();
+                title_label.font().set_bold(true);
                 title_label.set_object_name(&qs("title_label"));
                 title_label.set_parent(&widget);
 
                 title_label.set_maximum_size_2a(300, 20);
-                title_label.set_text_format(qt_core::TextFormat::MarkdownText);
 
 
                 let body_label = QLabel::new();
@@ -315,25 +312,65 @@ pub mod notifications {
             }
         }
 
-        pub unsafe fn set_content(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
+        unsafe fn set_content(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
             self.app_name_label.set_text(&app_name);
             self.body_label.set_text(&body);
-            self.title_label.set_text(&title); 
-            self.icon_label.set_pixmap(&icon);   
-            
+
+            let ellided_title = self.title_label.font_metrics().elided_text_3a(&title, TextElideMode::ElideRight, 200);
+            self.title_label.set_text(&ellided_title);
+
+            let scaled_icon = 
+                icon.scaled_2_int_aspect_ratio_mode_transformation_mode(
+                    ICON_SIZE, 
+                    ICON_SIZE, 
+                    AspectRatioMode::IgnoreAspectRatio,
+                TransformationMode::SmoothTransformation);  
+
+            self.icon_label.set_pixmap(&scaled_icon);   
+        }
+
+        pub unsafe fn set_content_no_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
+            self.set_content(app_name, title, body, icon);
             self.image_label.set_maximum_size_2a(0, IMAGE_SIZE);
             self.image_label.set_minimum_size_2a(0, IMAGE_SIZE);
         }
 
         pub unsafe fn set_content_with_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, image: CppBox<QPixmap>, icon: CppBox<QPixmap>) {
-            self.app_name_label.set_text(&app_name);
-            self.body_label.set_text(&body);
-            self.title_label.set_text(&title); 
+            self.set_content(app_name, title, body, icon);
 
-            let scaled_image = image.scaled_2_int(IMAGE_SIZE, IMAGE_SIZE);
+            let scaled_image = self.resize_image(image);
 
-            self.image_label.set_pixmap(&scaled_image);  
-            self.icon_label.set_pixmap(&icon);       
+            self.image_label.set_pixmap(&scaled_image);      
+        }
+
+        unsafe fn resize_image(self: &Rc<Self>, pixmap: CppBox<QPixmap>) -> CppBox<QPixmap> {
+            let target = QPixmap::from_2_int(IMAGE_SIZE, IMAGE_SIZE);
+
+            target.fill_1a(&QColor::from_global_color(GlobalColor::Transparent));
+
+            let painter = QPainter::new_1a(&target);
+
+            painter.set_render_hints_2a(RenderHint::HighQualityAntialiasing | 
+                RenderHint::SmoothPixmapTransform |
+                RenderHint::Antialiasing,
+                 true);
+
+            let path = QPainterPath::new_0a();
+            path.add_round_rect_6a(
+                0.0, 0.0, IMAGE_SIZE as f64, IMAGE_SIZE as f64, 20, 20);
+
+            painter.set_clip_path_1a(&path);
+
+            let scaled_pixmap = 
+                pixmap.scaled_2_int_aspect_ratio_mode_transformation_mode(
+                    IMAGE_SIZE, 
+                    IMAGE_SIZE, 
+                    AspectRatioMode::IgnoreAspectRatio,
+                TransformationMode::SmoothTransformation);
+
+            painter.draw_pixmap_q_rect_q_pixmap(&target.rect(), &scaled_pixmap);
+
+            target
         }
 
         #[slot(SlotNoArgs)]
@@ -367,8 +404,8 @@ pub mod notifications {
                 self.frame_shadow.set_offset_2_double(0.0, 0.0);
             }
             else if self.exit_animation.state() != q_abstract_animation::State::Running {
-                self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY as f64);
-                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(HOVERED_NOTIFICATION_OPACITY));
+                self.widget.set_window_opacity(HOVERED_NOTIFICATION_OPACITY);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_OPACITY));
                 self.blur_effect.set_blur_radius(HOVERED_NOTIFICATION_BLUR_RADIUS);
                 self.blur_animation.set_start_value(&qt_core::QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
             }
@@ -378,11 +415,11 @@ pub mod notifications {
         pub unsafe fn unhover(self: &Rc<Self>) {
             if self.overlay.is_visible() {
                 self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
                 
             } else if self.exit_animation.state() != q_abstract_animation::State::Running {
-                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
-                self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
+                self.exit_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_OPACITY));
                 self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
                 self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
             }
@@ -410,13 +447,13 @@ pub mod notifications {
         #[slot(SlotNoArgs)]
         unsafe fn animate_exit(self: &Rc<Self>) {
             self.exit_animation.set_duration(NOTIFICATION_EXIT_DURATION);
-            self.exit_animation.set_start_value(&qt_core::QVariant::from_float(DEFAULT_NOTIFICATION_OPACITY));
+            self.exit_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_OPACITY));
             self.exit_animation.set_end_value(&qt_core::QVariant::from_float(0.0));
             self.exit_animation.set_easing_curve(&qt_core::QEasingCurve::new_1a(qt_core::q_easing_curve::Type::OutCurve));
 
             self.blur_animation.set_duration(NOTIFICATION_EXIT_DURATION);
             self.blur_animation.set_start_value(&qt_core::QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
-            self.blur_animation.set_end_value(&qt_core::QVariant::from_int(DISAPPEARING_NOTIFICATION_BLUR_RADIUS));
+            self.blur_animation.set_end_value(&qt_core::QVariant::from_double(DISAPPEARING_NOTIFICATION_BLUR_RADIUS));
 
             self.parallel_animation.add_animation(&self.blur_animation);
             self.parallel_animation.add_animation(&self.exit_animation);
@@ -450,7 +487,7 @@ pub mod notifications {
             }
             self.exit_animation_group.pause();
             self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-            self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY as f64);
+            self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
         }
 
         #[slot(SlotNoArgs)]
