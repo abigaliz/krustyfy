@@ -11,7 +11,7 @@ pub mod notifications {
     use qt_gui::{QColor, QCursor, QPixmap};
     use qt_widgets::{QFrame,
                      QGraphicsBlurEffect, QGraphicsDropShadowEffect,
-                     QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QMainWindow, QDialog
+                     QHBoxLayout, QLabel, QPushButton, QStackedLayout, QVBoxLayout, QDialog, QApplication
     };
 
     const NOTIFICATION_HEIGHT: i32 = 143;
@@ -30,6 +30,9 @@ pub mod notifications {
 
     const HOVERED_NOTIFICATION_OPACITY: f32 = 0.2;
     const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
+
+
+    
     
     #[derive(Debug)]
     pub struct NotificationWidget {
@@ -70,11 +73,10 @@ pub mod notifications {
             close_signal: &QBox<SignalOfQString>, 
             action_signal: &QBox<SignalOfInt>, 
             notification_id: u32, 
-            main_window: &QBox<QMainWindow>,
             guid: String) -> Rc<NotificationWidget> {
             unsafe {
 
-                let topleft = main_window.screen().geometry().top_left();
+                let topleft = QApplication::desktop().screen_1a(-1).geometry().top_left();
                 // Set the notification widget
                 let widget = QDialog::new_0a();
                 widget.set_object_name(&qs(&guid));

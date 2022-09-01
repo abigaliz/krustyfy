@@ -4,7 +4,6 @@ use std::sync::Mutex;
 use cpp_core::{Ptr, StaticUpcast, };
 
 use linked_hash_map::LinkedHashMap;
-use qt_widgets::{QMainWindow};
 use tokio::sync::mpsc::UnboundedSender;
 
 use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
@@ -20,17 +19,17 @@ pub struct NotificationSpawner {
     reorder_signal: QBox<SignalNoArgs>,
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
-    main_window: QBox<QMainWindow>,
+    qobject: QBox<QObject>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
     unsafe fn static_upcast(ptr: Ptr<Self>) -> Ptr<QObject> {
-        ptr.main_window.as_ptr().static_upcast()
+        ptr.qobject.as_ptr().static_upcast()
     }
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: UnboundedSender<i32>, main_window: QBox<QMainWindow>) -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -47,6 +46,8 @@ impl NotificationSpawner {
 
             let close_signal=  SignalOfQString::new();
 
+            let qobject = QObject::new_0a();
+
             Rc::new(Self {
                 widget_list,
                 check_hover,
@@ -55,7 +56,7 @@ impl NotificationSpawner {
                 reorder_signal,
                 action_signal,
                 close_signal,
-                main_window
+                qobject
             })
         }
     }
@@ -73,7 +74,7 @@ impl NotificationSpawner {
 
     #[slot(SlotOfQVariant)]
     pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QVariant>) {
-        let notification_hash = serialized_notification.to_hash();
+         let notification_hash = serialized_notification.to_hash();
 
         let notification = Notification::from_qvariant(&notification_hash);
 
@@ -88,8 +89,6 @@ impl NotificationSpawner {
             notification.expire_timeout, 
             notification.notification_id,
             notification.desktop_entry);
-
-        self.main_window.dump_object_tree();
     }
 
     pub unsafe fn spawn_notification(
@@ -107,8 +106,8 @@ impl NotificationSpawner {
 
         let guid = Uuid::new_v4().to_string();
 
-        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id, &self.main_window, guid.clone());
-
+        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id, guid.clone());
+ 
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
         let icon =    if !desktop_entry.is_empty() {
@@ -129,8 +128,9 @@ impl NotificationSpawner {
         _notification_widget.animate_entry_signal.emit(0 as i32);
 
         self.widget_list.lock().unwrap().insert(guid, _notification_widget);
+
         self.reorder();
-    }
+    } 
 
     unsafe fn reorder(self : &Rc<Self>) {
         self.reorder_signal.emit();

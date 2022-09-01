@@ -9,8 +9,8 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{ConnectionType, SignalOfQVariant, WindowType, SlotNoArgs};
-use qt_widgets::{QApplication, QMainWindow, QPushButton};
+use qt_core::{ConnectionType, SignalOfQVariant};
+use qt_widgets::{QApplication};
 
 mod notification_widget;
 mod notification_spawner;
@@ -144,31 +144,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     QApplication::init(|_app| unsafe {
-
-        let main_window = QMainWindow::new_0a();
-
-        main_window.set_window_flags(
-            WindowType::WindowStaysOnTopHint | 
-            WindowType::WindowDoesNotAcceptFocus |
-            WindowType::WindowTransparentForInput |
-            WindowType::Tool);
-
-        let screen = QApplication::desktop().screen_1a(-1);
-        main_window.set_geometry_4a(screen.x() + 200, screen.y() + 200, 0, 0);
-
-        main_window.set_window_opacity(0.0);
-
-        let debug_button = QPushButton::new();
-
-        main_window.layout().add_widget(&debug_button);
-
-        debug_button.clicked().connect(&SlotNoArgs::new(&main_window, move || {
-            debug_button.parent().dump_object_tree();
-        }));
-
-        main_window.show();
-
-        let spawner = NotificationSpawner::new(action_sender, main_window);
+        let spawner = NotificationSpawner::new(action_sender);
 
         spawner.init();
 
@@ -176,11 +152,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         notitification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_spawn_notification());
 
-        let signal = notitification_signal.as_raw_ref();
+        let signal = notitification_signal.as_raw_ref().unwrap();
         tokio::spawn(async move {
             while let Some(message) = notification_receiver.recv().await { 
     
-                signal.unwrap().emit(message.to_qvariant().as_ref());
+                signal.emit(message.to_qvariant().as_ref());
             }
         });
 
