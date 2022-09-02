@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
 
         let spawner = NotificationSpawner::new(action_sender, template_file);
-
+        
         spawner.init();
 
         let notitification_signal = SignalOfQVariant::new();

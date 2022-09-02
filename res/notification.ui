@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>320</width>
+    <width>325</width>
     <height>148</height>
    </rect>
   </property>
@@ -23,10 +23,9 @@
     </rect>
    </property>
    <property name="styleSheet">
-    <string notr="true">border-radius: 20px;
+    <string notr="true">border-radius: 15px;
 background-color: black;
-border-style:none;
-box-shadow: 0px 0px 10px 3px #000000;</string>
+border-style:none;</string>
    </property>
    <property name="frameShape">
     <enum>QFrame::StyledPanel</enum>
@@ -116,13 +115,13 @@ border-style: none;</string>
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>25</height>
+          <height>20</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>300</width>
-          <height>25</height>
+          <height>20</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -130,7 +129,7 @@ border-style: none;</string>
 border-style: none;</string>
         </property>
         <property name="text">
-         <string/>
+         <string>Test title</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
@@ -159,7 +158,7 @@ border-style: none;</string>
        <x>0</x>
        <y>0</y>
        <width>301</width>
-       <height>91</height>
+       <height>94</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -168,13 +167,13 @@ border-style: none;</string>
      </property>
      <layout class="QHBoxLayout" name="bodyLayout" stretch="0,1">
       <property name="spacing">
-       <number>5</number>
+       <number>3</number>
       </property>
       <property name="sizeConstraint">
-       <enum>QLayout::SetFixedSize</enum>
+       <enum>QLayout::SetMaximumSize</enum>
       </property>
       <property name="leftMargin">
-       <number>5</number>
+       <number>4</number>
       </property>
       <property name="topMargin">
        <number>0</number>
@@ -198,7 +197,7 @@ border-style: none;</string>
         </property>
         <property name="maximumSize">
          <size>
-          <width>85</width>
+          <width>0</width>
           <height>85</height>
          </size>
         </property>
@@ -209,9 +208,6 @@ border-style: none;</string>
         <property name="text">
          <string/>
         </property>
-        <property name="pixmap">
-         <pixmap>:/prefijoNuevo/photo_2022-08-20_16-42-52.jpg</pixmap>
-        </property>
         <property name="scaledContents">
          <bool>true</bool>
         </property>
@@ -221,84 +217,135 @@ border-style: none;</string>
        </widget>
       </item>
       <item>
-       <layout class="QVBoxLayout" name="bodyTextLayout" stretch="1,1">
-        <property name="spacing">
-         <number>2</number>
+       <widget class="QWidget" name="body_widget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Ignored" vsizetype="Fixed">
+          <horstretch>49</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
-        <property name="sizeConstraint">
-         <enum>QLayout::SetNoConstraint</enum>
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>0</height>
+         </size>
         </property>
-        <item>
-         <widget class="QLabel" name="titleLabel">
-          <property name="minimumSize">
-           <size>
-            <width>200</width>
-            <height>0</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>300</width>
-            <height>20</height>
-           </size>
-          </property>
-          <property name="font">
-           <font>
-            <weight>75</weight>
-            <bold>true</bold>
-           </font>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">background-color:rgba(255, 255, 255, 0);
+        <property name="maximumSize">
+         <size>
+          <width>290</width>
+          <height>90</height>
+         </size>
+        </property>
+        <property name="sizeIncrement">
+         <size>
+          <width>500</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="baseSize">
+         <size>
+          <width>300</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">background-color:rgba(255, 255, 255, 0);
 border-style: none;</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-          <property name="textFormat">
-           <enum>Qt::MarkdownText</enum>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="bodyLabel">
-          <property name="minimumSize">
-           <size>
-            <width>0</width>
-            <height>64</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>300</width>
-            <height>64</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">background-color:rgba(255, 255, 255, 0);
+        </property>
+        <layout class="QVBoxLayout" name="bodyTextLayout" stretch="0,1">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <property name="sizeConstraint">
+          <enum>QLayout::SetNoConstraint</enum>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="titleLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>200</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>280</width>
+             <height>20</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <weight>75</weight>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color:rgba(255, 255, 255, 0);
 border-style: none;</string>
-          </property>
-          <property name="text">
-           <string/>
-          </property>
-          <property name="textFormat">
-           <enum>Qt::MarkdownText</enum>
-          </property>
-          <property name="scaledContents">
-           <bool>false</bool>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-          </property>
-          <property name="wordWrap">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
-       </layout>
+           </property>
+           <property name="text">
+            <string>Test notification subject</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::MarkdownText</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="bodyLabel">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>64</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>300</width>
+             <height>64</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color:rgba(255, 255, 255, 0);
+border-style: none;</string>
+           </property>
+           <property name="text">
+            <string>Test notification body. Everything written here will be overwritten by the actual notification.</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::MarkdownText</enum>
+           </property>
+           <property name="scaledContents">
+            <bool>false</bool>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+           </property>
+           <property name="wordWrap">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </item>
      </layout>
     </widget>

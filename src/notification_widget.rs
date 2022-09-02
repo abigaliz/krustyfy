@@ -6,7 +6,7 @@ pub mod notifications {
 
     use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
-                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode, QPtr, QFile
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode, QPtr, QFile, ConnectionType
     };
     use qt_gui::{QColor, QCursor, QPixmap, QPainter, q_painter::RenderHint, QPainterPath};
     use qt_widgets::{QFrame,
@@ -185,6 +185,7 @@ pub mod notifications {
                 let app_name_label : QPtr<QLabel> = widget.find_child("appNameLabel").unwrap();
                 let image_label : QPtr<QLabel> = widget.find_child("imageLabel").unwrap();
                 let title_label: QPtr<QLabel> = widget.find_child("titleLabel").unwrap();
+
                 let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap(); 
 
                 let animate_entry_signal = SignalOfInt::new();
@@ -227,12 +228,20 @@ pub mod notifications {
             }
         }
 
+        #[slot(SlotNoArgs)]
+        unsafe fn ellide(self: &Rc<Self>) {
+            let ellided_title = self.title_label
+                .font_metrics()
+                .elided_text_3a(&self.title_label.text(), TextElideMode::ElideRight, self.title_label.width());
+            
+            self.title_label.set_text(&ellided_title);
+        }
+
         unsafe fn set_content(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
             self.app_name_label.set_text(&app_name);
             self.body_label.set_text(&body);
 
-            let ellided_title = self.title_label.font_metrics().elided_text_3a(&title, TextElideMode::ElideRight, 200);
-            self.title_label.set_text(&ellided_title);
+            self.title_label.set_text(&title);
 
             let scaled_icon = 
                 icon.scaled_2_int_aspect_ratio_mode_transformation_mode(
@@ -242,20 +251,25 @@ pub mod notifications {
                 TransformationMode::SmoothTransformation);  
 
             self.icon_label.set_pixmap(&scaled_icon);   
+
+            let signal = SignalNoArgs::new();
+            signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_ellide());
+            signal.emit();
         }
 
         pub unsafe fn set_content_no_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, icon: CppBox<QPixmap>) {
             self.set_content(app_name, title, body, icon);
-            self.image_label.set_maximum_size_2a(0, IMAGE_SIZE);
-            self.image_label.set_minimum_size_2a(0, IMAGE_SIZE);
         }
 
         pub unsafe fn set_content_with_image(self: &Rc<Self>, app_name: CppBox<QString>, title: CppBox<QString>, body: CppBox<QString>, image: CppBox<QPixmap>, icon: CppBox<QPixmap>) {
-            self.set_content(app_name, title, body, icon);
-
             let scaled_image = self.resize_image(image);
 
-            self.image_label.set_pixmap(&scaled_image);      
+            self.image_label.set_pixmap(&scaled_image);     
+            
+            self.image_label.set_maximum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
+            self.image_label.set_minimum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
+
+            self.set_content(app_name, title, body, icon);
         }
 
         unsafe fn resize_image(self: &Rc<Self>, pixmap: CppBox<QPixmap>) -> CppBox<QPixmap> {
