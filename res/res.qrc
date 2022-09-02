@@ -1,0 +1,5 @@
+<RCC>
+  <qresource prefix="default_icon">
+    <file>notifications.png</file>
+  </qresource>
+</RCC>
