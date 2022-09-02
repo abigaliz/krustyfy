@@ -1,12 +1,13 @@
 use std::rc::Rc;
 use std::sync::Mutex;
 
-use cpp_core::{Ptr, StaticUpcast, };
+use cpp_core::{Ptr, StaticUpcast };
 
 use linked_hash_map::LinkedHashMap;
+
 use tokio::sync::mpsc::UnboundedSender;
 
-use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant, QFile};
 use uuid::Uuid;
 
 use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{NotificationWidget}};
@@ -20,6 +21,7 @@ pub struct NotificationSpawner {
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
     qobject: QBox<QObject>,
+    template_file: QBox<QFile>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -29,7 +31,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: UnboundedSender<i32>, template_file: QBox<QFile>) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -56,7 +58,8 @@ impl NotificationSpawner {
                 reorder_signal,
                 action_signal,
                 close_signal,
-                qobject
+                qobject,
+                template_file
             })
         }
     }
@@ -108,7 +111,11 @@ impl NotificationSpawner {
 
         let guid = Uuid::new_v4().to_string();
 
-        let _notification_widget = NotificationWidget::new(&self.close_signal, &self.action_signal, notification_id, guid.clone());
+        let _notification_widget = NotificationWidget::new(
+            &self.template_file,
+            &self.close_signal, 
+            &self.action_signal, 
+            notification_id, guid.clone());
  
         self.check_hover.connect(&_notification_widget.slot_check_hover());
 
