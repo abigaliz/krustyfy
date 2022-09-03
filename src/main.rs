@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use qt_core::q_io_device::OpenModeFlag;
+use qt_gui::QIcon;
 use tokio::{self, sync::mpsc::{self, Sender}};
 use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use zvariant::Value;
@@ -10,7 +11,7 @@ use zvariant::Value;
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
 use qt_core::{ConnectionType, SignalOfQVariant, qs, QFlags, QFile};
-use qt_widgets::{QApplication};
+use qt_widgets::{QApplication, QSystemTrayIcon, QMenu, SlotOfQAction};
 
 mod notification_widget;
 mod notification_spawner;
@@ -154,7 +155,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
 
         let spawner = NotificationSpawner::new(action_sender, template_file);
-        
+
         spawner.init();
 
         let notitification_signal = SignalOfQVariant::new();
@@ -169,7 +170,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         });
 
-        QApplication::exec()
+        let tray_icon = QSystemTrayIcon::new();
 
+        tray_icon.set_icon(&QIcon::from_theme_1a(&qs("notifications")));
+
+        tray_icon.show();
+
+        let tray_menu = QMenu::new();
+        let quit_action = tray_menu.add_action_q_string(&qs("Quit"));
+        quit_action.set_object_name(&qs("quit_action"));
+
+        tray_icon.set_context_menu(&tray_menu);
+
+        tray_menu.triggered().connect(&SlotOfQAction::new(&tray_menu, move |action| {
+            if action.object_name().to_std_string() == "quit_action".to_string() {
+                QApplication::close_all_windows();
+                tray_icon.hide();
+            }
+        }));
+        
+        QApplication::exec()
     });
 }

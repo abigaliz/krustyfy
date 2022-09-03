@@ -171,6 +171,7 @@ impl NotificationSpawner {
 
         let widget = &list[&closed_widget.to_std_string()];
         widget.widget.close();
+        widget.overlay.close();
 
         list.remove(&closed_widget.to_std_string());
 
