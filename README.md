@@ -1,9 +1,18 @@
 # krustyfy
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/abigaliz/krustyfy/master/krustify.png">
+</p>
+
+
 Unobtrusive notification daemon made in Rust and Qt.
 
 Notifications **can't be interacted with** (unless you keep Left Alt key pressed) and **mouse input goes right through them** :)
 
-![Sorry :(](https://raw.githubusercontent.com/abigaliz/krustyfy/master/krustify.png)
+
+https://user-images.githubusercontent.com/112440538/188256590-9793e49d-8265-4d85-a5f7-c2c3f3ed01bd.mp4
+
+
 
 ## Name
 
