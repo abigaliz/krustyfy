@@ -45,7 +45,7 @@ pub mod notifications {
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
         action_button: QPtr<QPushButton>,
-        notification_id: u32,
+        pub notification_id: u32,
         pub freeze_signal: QBox<SignalNoArgs>,
         pub unfreeze_signal: QBox<SignalNoArgs>,
         pub overlay: QBox<QDialog>,
@@ -303,6 +303,10 @@ pub mod notifications {
             target
         }
 
+        pub unsafe fn reset_timer(self: &Rc<Self>) {
+            self.exit_animation_group.set_current_time(0);
+        }
+
         #[slot(SlotNoArgs)]
         pub unsafe fn check_hover(self: &Rc<Self>) {
             let device_state = DeviceState::new();
@@ -365,11 +369,11 @@ pub mod notifications {
         }
 
         #[slot(SlotOfInt)]
-        pub unsafe fn animate_entry(self: &Rc<Self>, i: i32) {
+        pub unsafe fn animate_entry(self: &Rc<Self>, height: i32) {
             self.entry_animation.set_duration(NOTIFICATION_SPAWN_DURATION);
 
             let start_value = self.widget.geometry();
-            let end_value = QRect::from_4_int(start_value.left(), self.widget.height() * i, start_value.width(), start_value.height());
+            let end_value = QRect::from_4_int(start_value.left(), height, start_value.width(), start_value.height());
 
             self.entry_animation.set_start_value(&QVariant::from_q_rect(start_value));
             self.entry_animation.set_end_value(&QVariant::from_q_rect(&end_value));

@@ -98,7 +98,7 @@ impl NotificationSpawner {
     pub unsafe fn spawn_notification(
         self: &Rc<Self>, 
         app_name: String, 
-        _replaces_id: u32, 
+        replaces_id: u32, 
         _app_icon: String, 
         summary: String, 
         body: String, 
@@ -109,25 +109,61 @@ impl NotificationSpawner {
         notification_id: u32,
         desktop_entry: String) {
 
-        let guid = Uuid::new_v4().to_string();
+        let mut already_existing_notification: Option<&Rc<NotificationWidget>> = None;
 
-        let _notification_widget = NotificationWidget::new(
-            &self.template_file,
-            &self.close_signal, 
-            &self.action_signal, 
-            notification_id, guid.clone());
- 
-        self.check_hover.connect(&_notification_widget.slot_check_hover());
+        let mut list = self.widget_list.lock().unwrap();
 
-        let icon =    if !desktop_entry.is_empty() {
-                                        image_handler::find_icon(&desktop_entry)
-                                    }
-                                    else {
-                                        image_handler::find_icon(&app_name)
-                                    };
+        for widget in list.values() {
+            if widget.notification_id == replaces_id {
+                already_existing_notification = Some(widget);
+                break;
+            }
+        }
+
+        if already_existing_notification.is_none() {
+            let guid = Uuid::new_v4().to_string();
+
+            let _notification_widget = NotificationWidget::new(
+                &self.template_file,
+                &self.close_signal, 
+                &self.action_signal, 
+                notification_id, guid.clone());
+
+            self.set_notification_contents(app_name, image_data, image_path, desktop_entry, summary, body, &_notification_widget);
+
+            self.check_hover.connect(&_notification_widget.slot_check_hover());
+            
+            list.insert(guid, _notification_widget);
+
+            self.reorder(); 
+        } else {
+            let notification_widget = already_existing_notification.unwrap();
+
+            notification_widget.reset_timer();
+
+            self.set_notification_contents(app_name, image_data, image_path, desktop_entry, summary, body, notification_widget);
+        };
+    } 
+
+    unsafe fn set_notification_contents(
+        self: &Rc<Self>,
+        app_name: String, 
+        image_data: Option<ImageData>,
+        image_path: Option<String>,
+        desktop_entry: String,
+        summary: String, 
+        body: String,
+        notification_widget: &Rc<NotificationWidget>
+        ) {
+        let icon = if !desktop_entry.is_empty() {
+            image_handler::find_icon(&desktop_entry)
+         }
+         else {
+             image_handler::find_icon(&app_name)
+         };
 
         if image_data.is_none() && image_path.is_none() {
-            _notification_widget.set_content_no_image(qs(app_name), qs(summary), qs(body), icon);
+            notification_widget.set_content_no_image(qs(app_name), qs(summary), qs(body), icon);
         }
         else {
             let pixmap = if image_data.is_some() {
@@ -136,14 +172,10 @@ impl NotificationSpawner {
             else {
                 image_handler::load_image(image_path.unwrap())
             };
-            
-            _notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
+
+            notification_widget.set_content_with_image(qs(app_name), qs(summary), qs(body), pixmap, icon);
         }
-
-        self.widget_list.lock().unwrap().insert(guid, _notification_widget);
-
-        self.reorder();
-    } 
+    }
 
     unsafe fn reorder(self : &Rc<Self>) {
         self.reorder_signal.emit();
@@ -153,10 +185,10 @@ impl NotificationSpawner {
     unsafe fn on_reorder(self : &Rc<Self>) {
         let list = self.widget_list.lock().unwrap();
 
-        let mut counter = 0;
+        let mut height_accumulator = 0;
         for widget in list.values() {
-            widget.animate_entry_signal.emit(counter);
-            counter += 1;
+            widget.animate_entry_signal.emit(height_accumulator);
+            height_accumulator += widget.widget.height();
         }
     }
 
