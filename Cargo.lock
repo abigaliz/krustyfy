@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "krustyfy"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "byteorder",
  "copy_to_output",
