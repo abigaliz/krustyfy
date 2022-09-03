@@ -150,7 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     QApplication::init(|_app| unsafe {
-        let template_file = QFile::from_q_string(&qs("./res/notification.ui"));
+        let template_file = QFile::from_q_string(&qs("./res/template.ui"));
         template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
 
         let spawner = NotificationSpawner::new(action_sender, template_file);

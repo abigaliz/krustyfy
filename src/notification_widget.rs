@@ -4,20 +4,15 @@ pub mod notifications {
     use cpp_core::{CppBox, Ptr, StaticUpcast, Ref};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
-    use qt_core::{CursorShape, q_abstract_animation, QBox, QByteArray,
+    use qt_core::{q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
                   QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode, QPtr, QFile, ConnectionType, QEasingCurve, QVariant
     };
     use qt_gui::{QColor, QCursor, QPixmap, QPainter, q_painter::RenderHint, QPainterPath};
     use qt_widgets::{QFrame,
                      QGraphicsBlurEffect, QGraphicsDropShadowEffect,
-                     QLabel, QPushButton, QStackedLayout, QDialog, QApplication
+                     QLabel, QPushButton, QStackedLayout, QDialog, QApplication, QWidget
     };
-
-    const NOTIFICATION_HEIGHT: i32 = 143;
-    const NOTIFICATION_WIDTH: i32 = 318;
-    const ICON_SIZE: i32 = 25;
-    const IMAGE_SIZE: i32 = 85;
     
     const NOTIFICATION_SPAWN_DURATION: i32 = 200;
     const NOTIFICATION_DURATION: i32 = 6500;
@@ -49,7 +44,7 @@ pub mod notifications {
         close_signal: Ref<SignalOfQString>,
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
-        action_button: QBox<QPushButton>,
+        action_button: QPtr<QPushButton>,
         notification_id: u32,
         pub freeze_signal: QBox<SignalNoArgs>,
         pub unfreeze_signal: QBox<SignalNoArgs>,
@@ -99,15 +94,15 @@ pub mod notifications {
                 template_file.reset();
 
                 let template = loader.load_1a(template_file.as_ptr());
-                template.set_attribute_1a( WidgetAttribute::WADeleteOnClose);
+                
+                let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
 
-                widget.layout().add_widget(&template);
+                widget.layout().add_widget(&notification);
 
+                let overlay_widget: QPtr<QWidget> = template.find_child("overlay").unwrap();
                 // Set the default action overlay
                 let overlay = QDialog::new_1a(&widget);
                 overlay.set_object_name(&qs("overlay"));
-
-                overlay.set_geometry_4a(topleft.x(), 0, 400, 400);
 
                 overlay.set_window_flags(
                     WindowType::WindowStaysOnTopHint | 
@@ -119,23 +114,12 @@ pub mod notifications {
 
                 overlay.set_window_opacity(0.0);
 
-                let cursor = QCursor::new();
-                cursor.set_shape(CursorShape::PointingHandCursor);
-
-                overlay.set_cursor(cursor.as_ref());
-
                 let overlay_layout = QStackedLayout::new();
                 overlay_layout.set_object_name(&qs("overlay_layout"));
-                overlay_layout.set_geometry(&QRect::from_4_int(0, 0, 400, 300));
-                overlay_layout.set_margin(0);
-                overlay_layout.set_spacing(0);
                 overlay.set_layout(overlay_layout.as_ptr());
+                overlay_layout.add_widget(&overlay_widget);
         
-                let action_button = QPushButton::new();
-                action_button.set_object_name(&qs("action_button"));
-                action_button.set_geometry_4a(0, 0, 400, 300);
-                
-                overlay_layout.add_widget(&action_button);
+                let action_button: QPtr<QPushButton> = overlay_widget.find_child("pushButton").unwrap();               
                 
 
                 let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);
@@ -144,7 +128,7 @@ pub mod notifications {
                 widget.set_graphics_effect(&blur_effect);
                 blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
 
-                widget.set_geometry_4a(topleft.x(), 0 - NOTIFICATION_HEIGHT, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
+                widget.set_geometry_4a(topleft.x(), 0 - notification.geometry().height(), notification.geometry().width(), notification.geometry().height());
 
                 widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
 
@@ -262,8 +246,8 @@ pub mod notifications {
 
             let scaled_icon = 
                 icon.scaled_2_int_aspect_ratio_mode_transformation_mode(
-                    ICON_SIZE, 
-                    ICON_SIZE, 
+                    self.icon_label.width(), 
+                    self.icon_label.height(), 
                     AspectRatioMode::IgnoreAspectRatio,
                 TransformationMode::SmoothTransformation);  
 
@@ -283,14 +267,14 @@ pub mod notifications {
 
             self.image_label.set_pixmap(&scaled_image);     
             
-            self.image_label.set_maximum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
-            self.image_label.set_minimum_size_2a(IMAGE_SIZE, IMAGE_SIZE);
+            self.image_label.set_maximum_size_2a(self.image_label.maximum_height(), self.image_label.maximum_height());
+            self.image_label.set_minimum_size_2a(self.image_label.maximum_height(), self.image_label.maximum_height());
 
             self.set_content(app_name, title, body, icon);
         }
 
         unsafe fn resize_image(self: &Rc<Self>, pixmap: CppBox<QPixmap>) -> CppBox<QPixmap> {
-            let target = QPixmap::from_2_int(IMAGE_SIZE, IMAGE_SIZE);
+            let target = QPixmap::from_2_int(self.image_label.maximum_height(), self.image_label.maximum_height());
 
             target.fill_1a(&QColor::from_global_color(GlobalColor::Transparent));
 
@@ -303,14 +287,14 @@ pub mod notifications {
 
             let path = QPainterPath::new_0a();
             path.add_round_rect_6a(
-                0.0, 0.0, IMAGE_SIZE as f64, IMAGE_SIZE as f64, 25, 25);
+                0.0, 0.0, self.image_label.maximum_height() as f64, self.image_label.maximum_height() as f64, 25, 25);
 
             painter.set_clip_path_1a(&path);
 
             let scaled_pixmap = 
                 pixmap.scaled_2_int_aspect_ratio_mode_transformation_mode(
-                    IMAGE_SIZE, 
-                    IMAGE_SIZE, 
+                    self.image_label.maximum_height(), 
+                    self.image_label.maximum_height(), 
                     AspectRatioMode::IgnoreAspectRatio,
                 TransformationMode::SmoothTransformation);
 
@@ -384,12 +368,10 @@ pub mod notifications {
         pub unsafe fn animate_entry(self: &Rc<Self>, i: i32) {
             self.entry_animation.set_duration(NOTIFICATION_SPAWN_DURATION);
 
-            let g = self.widget.geometry();
+            let start_value = self.widget.geometry();
+            let end_value = QRect::from_4_int(start_value.left(), self.widget.height() * i, start_value.width(), start_value.height());
 
-            let start_value = QRect::from_4_int(g.left(), g.top(), g.width(), g.height());
-            let end_value = QRect::from_4_int(g.left(), NOTIFICATION_HEIGHT * i, g.width(), g.height());
-
-            self.entry_animation.set_start_value(&QVariant::from_q_rect(&start_value));
+            self.entry_animation.set_start_value(&QVariant::from_q_rect(start_value));
             self.entry_animation.set_end_value(&QVariant::from_q_rect(&end_value));
             self.entry_animation.start_0a();
         }
@@ -459,11 +441,8 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_button_clicked(self: &Rc<Self>) {
-            println!("Clicked");
-
             self.action_signal.emit(self.notification_id as i32);
             self.on_close();
-            print!("wanting to close {}", self.widget.win_id().to_string());
         }
     }
 }
