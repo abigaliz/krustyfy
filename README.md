@@ -12,6 +12,15 @@ Notifications **can't be interacted with** (unless you keep Left Alt key pressed
 
 https://user-images.githubusercontent.com/112440538/188256590-9793e49d-8265-4d85-a5f7-c2c3f3ed01bd.mp4
 
+## Configuration
+
+Most settings can be changed directly from the **res/template.ui** config file. From the layout of the notification itself to settings like duration, monitor, shadow color, etc. More settings comming soon. :)
+
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/112440538/188322780-06a043c8-4b3f-449d-9853-3154f8788b0b.png">
+</p>
+
+Take into account that some widgets MUST exist in the template.ui file, otherwise it'll crash. Modify it wisely.
 
 
 ## Name
