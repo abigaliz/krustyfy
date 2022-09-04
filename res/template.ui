@@ -16,6 +16,47 @@
   <property name="windowOpacity">
    <double>0.900000000000000</double>
   </property>
+  <property name="defaultOpacity" stdset="0">
+   <double>0.800000000000000</double>
+  </property>
+  <property name="hoveredOpacity" stdset="0">
+   <double>0.200000000000000</double>
+  </property>
+  <property name="defaultBlur" stdset="0">
+   <double>1.000000000000000</double>
+  </property>
+  <property name="hoveredBlur" stdset="0">
+   <double>10.000000000000000</double>
+  </property>
+  <property name="defaultMonitor" stdset="0">
+   <number>-1</number>
+  </property>
+  <property name="endBlur" stdset="0">
+   <double>15.000000000000000</double>
+  </property>
+  <property name="notificationDuration" stdset="0">
+   <number>6500</number>
+  </property>
+  <property name="spawnDuration" stdset="0">
+   <number>200</number>
+  </property>
+  <property name="disappearDuration" stdset="0">
+   <number>600</number>
+  </property>
+  <property name="defaultShadowColor" stdset="0">
+   <color>
+    <red>0</red>
+    <green>0</green>
+    <blue>0</blue>
+   </color>
+  </property>
+  <property name="focusedShadowColor" stdset="0">
+   <color>
+    <red>255</red>
+    <green>255</green>
+    <blue>255</blue>
+   </color>
+  </property>
   <widget class="QWidget" name="notification" native="true">
    <property name="geometry">
     <rect>

@@ -1,31 +1,19 @@
 pub mod notifications {
     use std::{rc::Rc};
 
-    use cpp_core::{CppBox, Ptr, StaticUpcast, Ref};
+    use cpp_core::{CppBox, Ptr, StaticUpcast, Ref, CppDeletable};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
     use qt_core::{q_abstract_animation, QBox, QByteArray,
                   QObject, QParallelAnimationGroup, QPropertyAnimation, QRect, qs, QSequentialAnimationGroup,
-                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode, QPtr, QFile, ConnectionType, QEasingCurve, QVariant
+                  QString, SignalNoArgs, SignalOfInt, SignalOfQString, slot, SlotNoArgs, SlotOfInt, WidgetAttribute, WindowType, AspectRatioMode, TransformationMode, GlobalColor, TextElideMode, QPtr, QFile, ConnectionType, QEasingCurve, QVariant, QFlags, q_io_device::OpenModeFlag
     };
     use qt_gui::{QColor, QCursor, QPixmap, QPainter, q_painter::RenderHint, QPainterPath};
     use qt_widgets::{QFrame,
                      QGraphicsBlurEffect, QGraphicsDropShadowEffect,
                      QLabel, QPushButton, QStackedLayout, QDialog, QApplication, QWidget
     };
-    
-    const NOTIFICATION_SPAWN_DURATION: i32 = 200;
-    const NOTIFICATION_DURATION: i32 = 6500;
-    const NOTIFICATION_EXIT_DURATION: i32 = 600;
-
-    const DEFAULT_NOTIFICATION_BLUR_RADIUS: f64 = 1.0;
-    const DISAPPEARING_NOTIFICATION_BLUR_RADIUS: f64 = 15.0;
-
-    const DEFAULT_NOTIFICATION_OPACITY: f64 = 0.8;
-
-    const HOVERED_NOTIFICATION_OPACITY: f64 = 0.2;
-    const HOVERED_NOTIFICATION_BLUR_RADIUS: f64 = 10.0;
-    
+        
     #[derive(Debug)]
     pub struct NotificationWidget {
         pub widget: QBox<QDialog>,
@@ -53,6 +41,14 @@ pub mod notifications {
         action_signal: Ref<SignalOfInt>,
         guid: String,
         parallel_hover_animation: QBox<QParallelAnimationGroup>,
+        default_opacity: CppBox<QVariant>,
+        default_blur: CppBox<QVariant>,
+        end_blur: CppBox<QVariant>,
+        notification_duration: CppBox<QVariant>,
+        spawn_duration: CppBox<QVariant>,
+        disappear_duration: CppBox<QVariant>,
+        default_shadow_color: CppBox<QVariant>,
+        focused_shadow_color: CppBox<QVariant>,
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -63,7 +59,6 @@ pub mod notifications {
 
     impl NotificationWidget {
         pub fn new(
-            template_file: &QBox<QFile>,
             close_signal: &QBox<SignalOfQString>, 
             action_signal: &QBox<SignalOfInt>, 
             notification_id: u32, 
@@ -86,15 +81,70 @@ pub mod notifications {
                 widget.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
 
                 let widget_layout = QStackedLayout::new();
-                let topleft = QApplication::desktop().screen_1a(-1).geometry().top_left();
 
                 widget.set_layout(widget_layout.as_ptr());
 
+                let template_file = QFile::from_q_string(&qs("./res/template.ui"));
+                template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
                 let loader = qt_ui_tools::QUiLoader::new_1a(&widget);
-                template_file.reset();
-
                 let template = loader.load_1a(template_file.as_ptr());
-                
+                template_file.reset();
+                template_file.close();
+                template_file.delete();
+
+                let properties = template.dynamic_property_names().iter();
+
+                let mut default_opacity: CppBox<QVariant> = QVariant::new();
+                let mut hovered_opacity: CppBox<QVariant> = QVariant::new();
+                let mut default_blur: CppBox<QVariant> = QVariant::new();
+                let mut hovered_blur: CppBox<QVariant> = QVariant::new();
+                let mut default_monitor: CppBox<QVariant> = QVariant::new();
+                let mut end_blur: CppBox<QVariant> = QVariant::new();
+                let mut notification_duration: CppBox<QVariant> = QVariant::new();
+                let mut spawn_duration: CppBox<QVariant> = QVariant::new();
+                let mut disappear_duration: CppBox<QVariant> = QVariant::new();
+                let mut focused_shadow_color: CppBox<QVariant> = QVariant::new();
+                let mut default_shadow_color: CppBox<QVariant> = QVariant::new();
+
+                for property in properties {
+                    if property.index_of_q_string(&qs("defaultOpacity")) > -1 {
+                        default_opacity = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("hoveredOpacity")) > -1 {
+                        hovered_opacity = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("defaultBlur")) > -1 {
+                        default_blur = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("hoveredBlur")) > -1 {
+                        hovered_blur = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("defaultMonitor")) > -1 {
+                        default_monitor = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("endBlur")) > -1 {
+                        end_blur = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("notificationDuration")) > -1 {
+                        notification_duration = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("spawnDuration")) > -1 {
+                        spawn_duration = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("disappearDuration")) > -1 {
+                        disappear_duration = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("defaultShadowColor")) > -1 {
+                        default_shadow_color = template.property(property.to_char());
+                    }
+                    if property.index_of_q_string(&qs("focusedShadowColor")) > -1 {
+                        focused_shadow_color = template.property(property.to_char());
+                    }
+                }
+
+
+                let topleft = QApplication::desktop().screen_1a(default_monitor.to_int_0a()).geometry().top_left();
+
                 let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
 
                 widget.layout().add_widget(&notification);
@@ -126,11 +176,11 @@ pub mod notifications {
                 blur_effect.set_object_name(&qs("blur_effect"));
 
                 widget.set_graphics_effect(&blur_effect);
-                blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                blur_effect.set_blur_radius(default_blur.to_double_0a());
 
                 widget.set_geometry_4a(topleft.x(), 0 - notification.geometry().height(), notification.geometry().width(), notification.geometry().height());
 
-                widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
+                widget.set_window_opacity(default_opacity.to_double_0a());
 
                 // Set animations
                 let y_property = QByteArray::new();
@@ -159,11 +209,11 @@ pub mod notifications {
                 let parallel_hover_animation = QParallelAnimationGroup::new_1a(&widget);
                 parallel_hover_animation.set_object_name(&qs("parallel_hover_animation"));
 
-                blur_hover_animation.set_start_value(&QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
-                blur_hover_animation.set_end_value(&QVariant::from_double(HOVERED_NOTIFICATION_BLUR_RADIUS));
+                blur_hover_animation.set_start_value(&default_blur);
+                blur_hover_animation.set_end_value(&hovered_blur);
                 blur_hover_animation.set_duration(100);
-                opacity_hover_animation.set_start_value(&QVariant::from_double(DEFAULT_NOTIFICATION_OPACITY));
-                opacity_hover_animation.set_end_value(&QVariant::from_double(HOVERED_NOTIFICATION_OPACITY));
+                opacity_hover_animation.set_start_value(&default_opacity);
+                opacity_hover_animation.set_end_value(&hovered_opacity);
                 opacity_hover_animation.set_duration(100);
 
                 parallel_hover_animation.add_animation(&blur_hover_animation);
@@ -221,7 +271,15 @@ pub mod notifications {
                     overlay,
                     frame_shadow,
                     guid,
-                    parallel_hover_animation
+                    parallel_hover_animation,
+                    default_opacity,
+                    default_blur,
+                    end_blur,
+                    notification_duration,
+                    spawn_duration,
+                    disappear_duration,
+                    default_shadow_color,
+                    focused_shadow_color
                 });
                 this.init();
                 this.animate_exit();
@@ -333,10 +391,15 @@ pub mod notifications {
         
         pub unsafe fn hover(self: &Rc<Self>) {
             if self.overlay.is_visible() {
-                self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
+                self.blur_effect.set_blur_radius(self.default_blur.to_double_0a());
                 self.widget.set_window_opacity(1.0);
                 self.frame_shadow.set_blur_radius(15.0);
-                self.frame_shadow.set_color(QColor::from_3_int(255, 255, 255).as_ref());
+
+                self.frame_shadow.set_blur_radius(10.0);
+
+                let color = QColor::from_q_string(&self.focused_shadow_color.to_string());
+
+                self.frame_shadow.set_color(&color);
                 self.frame_shadow.set_offset_2_double(0.0, 0.0);
             }
             else if self.exit_animation.state() != q_abstract_animation::State::Running {
@@ -352,8 +415,8 @@ pub mod notifications {
 
         pub unsafe fn unhover(self: &Rc<Self>) {
             if self.overlay.is_visible() {
-                self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-                self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
+                self.blur_effect.set_blur_radius(self.default_blur.to_double_0a());
+                self.widget.set_window_opacity(self.default_opacity.to_double_0a());
                 
             } else if self.exit_animation.state() != q_abstract_animation::State::Running {               
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped && self.parallel_hover_animation.current_time() > 0 {
@@ -363,14 +426,17 @@ pub mod notifications {
             }
 
             self.frame_shadow.set_blur_radius(10.0);
-            self.frame_shadow.set_color(QColor::from_3_int(0, 0, 0).as_ref());
+
+            let color = QColor::from_q_string(&self.default_shadow_color.to_string());
+
+            self.frame_shadow.set_color(&color);
             self.frame_shadow.set_offset_2_double(1.0, 1.0);
             
         }
 
         #[slot(SlotOfInt)]
         pub unsafe fn animate_entry(self: &Rc<Self>, height: i32) {
-            self.entry_animation.set_duration(NOTIFICATION_SPAWN_DURATION);
+            self.entry_animation.set_duration(self.spawn_duration.to_int_0a());
 
             let start_value = self.widget.geometry();
             let end_value = QRect::from_4_int(start_value.left(), height, start_value.width(), start_value.height());
@@ -382,19 +448,19 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn animate_exit(self: &Rc<Self>) {
-            self.exit_animation.set_duration(NOTIFICATION_EXIT_DURATION);
-            self.exit_animation.set_start_value(&QVariant::from_double(DEFAULT_NOTIFICATION_OPACITY));
+            self.exit_animation.set_duration(self.disappear_duration.to_int_0a());
+            self.exit_animation.set_start_value(&self.default_opacity);
             self.exit_animation.set_end_value(&QVariant::from_float(0.0));
             self.exit_animation.set_easing_curve(&QEasingCurve::new_1a(qt_core::q_easing_curve::Type::OutCurve));
 
-            self.blur_animation.set_duration(NOTIFICATION_EXIT_DURATION);
-            self.blur_animation.set_start_value(&QVariant::from_double(DEFAULT_NOTIFICATION_BLUR_RADIUS));
-            self.blur_animation.set_end_value(&QVariant::from_double(DISAPPEARING_NOTIFICATION_BLUR_RADIUS));
+            self.blur_animation.set_duration(self.disappear_duration.to_int_0a());
+            self.blur_animation.set_start_value(&self.default_blur);
+            self.blur_animation.set_end_value(&self.end_blur);
 
             self.parallel_animation.add_animation(&self.blur_animation);
             self.parallel_animation.add_animation(&self.exit_animation);
 
-            self.exit_animation_group.add_pause(NOTIFICATION_DURATION)
+            self.exit_animation_group.add_pause(self.notification_duration.to_int_0a())
                 .finished().connect(&self.slot_on_init_exit());
             self.exit_animation_group.add_animation(&self.parallel_animation);
 
@@ -430,8 +496,8 @@ pub mod notifications {
                 return;
             }
             self.exit_animation_group.pause();
-            self.blur_effect.set_blur_radius(DEFAULT_NOTIFICATION_BLUR_RADIUS);
-            self.widget.set_window_opacity(DEFAULT_NOTIFICATION_OPACITY);
+            self.blur_effect.set_blur_radius(self.default_blur.to_double_0a());
+            self.widget.set_window_opacity(self.default_opacity.to_double_0a());
         }
 
         #[slot(SlotNoArgs)]

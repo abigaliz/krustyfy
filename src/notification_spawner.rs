@@ -7,7 +7,7 @@ use linked_hash_map::LinkedHashMap;
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant, QFile};
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
 use uuid::Uuid;
 
 use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{NotificationWidget}};
@@ -21,7 +21,6 @@ pub struct NotificationSpawner {
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
     qobject: QBox<QObject>,
-    template_file: QBox<QFile>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -31,7 +30,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: UnboundedSender<i32>, template_file: QBox<QFile>) -> Rc<NotificationSpawner> {
+    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -59,7 +58,6 @@ impl NotificationSpawner {
                 action_signal,
                 close_signal,
                 qobject,
-                template_file
             })
         }
     }
@@ -113,6 +111,8 @@ impl NotificationSpawner {
 
         let mut list = self.widget_list.lock().unwrap();
 
+        println!("Current amount of notifications: {}", &list.len().to_string());
+
         for widget in list.values() {
             if widget.notification_id == replaces_id {
                 already_existing_notification = Some(widget);
@@ -124,7 +124,6 @@ impl NotificationSpawner {
             let guid = Uuid::new_v4().to_string();
 
             let _notification_widget = NotificationWidget::new(
-                &self.template_file,
                 &self.close_signal, 
                 &self.action_signal, 
                 notification_id, guid.clone());
