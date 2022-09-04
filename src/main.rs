@@ -2,7 +2,6 @@ use std::{error::Error};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
-use qt_core::q_io_device::OpenModeFlag;
 use qt_gui::QIcon;
 use tokio::{self, sync::mpsc::{self, Sender}};
 use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
@@ -10,7 +9,7 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{ConnectionType, SignalOfQVariant, qs, QFlags, QFile};
+use qt_core::{ConnectionType, SignalOfQVariant, qs};
 use qt_widgets::{QApplication, QSystemTrayIcon, QMenu, SlotOfQAction};
 
 mod notification_widget;
@@ -151,10 +150,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     QApplication::init(|_app| unsafe {
-        let template_file = QFile::from_q_string(&qs("./res/template.ui"));
-        template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
-
-        let spawner = NotificationSpawner::new(action_sender, template_file);
+        let spawner = NotificationSpawner::new(action_sender);
 
         spawner.init();
 

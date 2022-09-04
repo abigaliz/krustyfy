@@ -93,7 +93,7 @@ pub struct Notification {
 impl Notification {
     pub unsafe fn from_qvariant(hash : &CppBox<QHashOfQStringQVariant>) -> Self {
         let app_name = hash.value_1a(&qs("app_name")).to_string().to_std_string();
-        let replaces_id = hash.value_1a(&qs("height")).to_u_int_0a();
+        let replaces_id = hash.value_1a(&qs("replaces_id")).to_u_int_0a();
         let app_icon = hash.value_1a(&qs("app_icon")).to_string().to_std_string();
         let summary = hash.value_1a(&qs("summary")).to_string().to_std_string();
         let body = hash.value_1a(&qs("body")).to_string().to_std_string();
