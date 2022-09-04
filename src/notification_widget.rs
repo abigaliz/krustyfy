@@ -407,8 +407,7 @@ pub mod notifications {
 
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped && self.parallel_hover_animation.current_time() == 0 {
                     self.parallel_hover_animation.start_0a();
-                }
-                    
+                }                    
             }
             
         }
@@ -503,6 +502,12 @@ pub mod notifications {
         #[slot(SlotNoArgs)]
         unsafe fn on_unfreeze(self: &Rc<Self>) {
             self.overlay.set_visible(false);
+            self.frame_shadow.set_blur_radius(10.0);
+
+            let color = QColor::from_q_string(&self.default_shadow_color.to_string());
+
+            self.frame_shadow.set_color(&color);
+            self.frame_shadow.set_offset_2_double(1.0, 1.0);
             if self.exit_animation_group.state() != q_abstract_animation::State::Paused {
                 return;
             }
