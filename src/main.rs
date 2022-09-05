@@ -82,9 +82,10 @@ impl NotificationHandler {
         
 
         let mut notification_id = replaces_id;
-        self.count += 1;
+        
 
         if notification_id == 0 {
+            self.count += 1;
             notification_id = self.count;
         }
 
@@ -128,7 +129,7 @@ impl NotificationHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let (notification_sender, mut notification_receiver) = mpsc::channel(32);
+    let (notification_sender, mut notification_receiver) = mpsc::channel(5);
     let (action_sender, mut action_receiver) = mpsc::unbounded_channel();
 
     let notification_handler = NotificationHandler { count: 0, sender: notification_sender};
@@ -173,6 +174,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tray_icon.show();
 
         let tray_menu = QMenu::new();
+
+        let do_not_disturb_action = tray_menu.add_action_q_string(&qs("Do not disturb"));
+        do_not_disturb_action.set_object_name(&qs("do_not_disturb_action"));
+        do_not_disturb_action.set_checkable(true);
+
         let quit_action = tray_menu.add_action_q_string(&qs("Quit"));
         quit_action.set_object_name(&qs("quit_action"));
 
@@ -182,6 +188,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             if action.object_name().to_std_string() == "quit_action".to_string() {
                 QApplication::close_all_windows();
                 tray_icon.hide();
+            }
+
+            if action.object_name().to_std_string() == "do_not_disturb_action".to_string() {
+                spawner.do_not_disturb(do_not_disturb_action.is_checked());
             }
         }));
         

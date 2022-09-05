@@ -1,5 +1,5 @@
 pub mod notifications {
-    use std::{rc::Rc};
+    use std::{rc::Rc, cell::RefCell};
 
     use cpp_core::{CppBox, Ptr, StaticUpcast, Ref, CppDeletable};
     use device_query::{DeviceQuery, DeviceState, Keycode};
@@ -33,7 +33,7 @@ pub mod notifications {
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
         action_button: QPtr<QPushButton>,
-        pub notification_id: u32,
+        pub notification_id: RefCell<u32>,
         pub freeze_signal: QBox<SignalNoArgs>,
         pub unfreeze_signal: QBox<SignalNoArgs>,
         pub overlay: QBox<QDialog>,
@@ -61,7 +61,7 @@ pub mod notifications {
         pub fn new(
             close_signal: &QBox<SignalOfQString>, 
             action_signal: &QBox<SignalOfInt>, 
-            notification_id: u32, 
+            _notification_id: u32, 
             guid: String) -> Rc<NotificationWidget> {
             unsafe {
                 // Set the notification widget
@@ -247,6 +247,8 @@ pub mod notifications {
 
                 let close = close_signal.as_ref().unwrap();
                 let action = action_signal.as_ref().unwrap();
+
+                let notification_id = RefCell::new(_notification_id);
 
                 let this = Rc::new(Self {
                     widget,
@@ -516,7 +518,8 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn on_button_clicked(self: &Rc<Self>) {
-            self.action_signal.emit(self.notification_id as i32);
+            let notification_id = self.notification_id.borrow().to_owned();
+            self.action_signal.emit(notification_id as i32);
             self.on_close();
         }
     }

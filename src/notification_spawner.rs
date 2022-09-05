@@ -1,13 +1,13 @@
-use std::rc::Rc;
-use std::sync::Mutex;
+use std::{cell::RefCell, rc::Rc};
+use std::sync::{Mutex, MutexGuard};
 
-use cpp_core::{Ptr, StaticUpcast };
+use cpp_core::{Ptr, StaticUpcast, Ref };
 
 use linked_hash_map::LinkedHashMap;
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
+use qt_core::{ConnectionType, QBox, QObject, qs, QString, QTimer, SignalNoArgs, SignalOfBool, SlotOfBool, SignalOfInt, SlotOfQVariant, SignalOfQString, slot, SlotNoArgs, SlotOfInt, SlotOfQString, QVariant};
 use uuid::Uuid;
 
 use crate::{image_handler, notification::{ImageData, Notification}, notification_widget::notifications::{NotificationWidget}};
@@ -21,6 +21,8 @@ pub struct NotificationSpawner {
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
     qobject: QBox<QObject>,
+    do_not_disturb: RefCell<bool>,
+    do_not_disturb_signal: QBox<SignalOfBool>
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -49,6 +51,10 @@ impl NotificationSpawner {
 
             let qobject = QObject::new_0a();
 
+            let do_not_disturb = RefCell::new(false);
+
+            let do_not_disturb_signal= SignalOfBool::new();
+
             Rc::new(Self {
                 widget_list,
                 check_hover,
@@ -58,6 +64,8 @@ impl NotificationSpawner {
                 action_signal,
                 close_signal,
                 qobject,
+                do_not_disturb,
+                do_not_disturb_signal
             })
         }
     }
@@ -71,15 +79,30 @@ impl NotificationSpawner {
         self.close_signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_widget_close());
 
         self.action_signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_action());
+
+        self.do_not_disturb_signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_do_not_disturb());
+    }
+
+    pub unsafe fn do_not_disturb(self: &Rc<Self>, do_not_disturb: bool) {
+        self.do_not_disturb_signal.emit(do_not_disturb);
+    }
+
+    #[slot(SlotOfBool)]
+    unsafe fn on_do_not_disturb(self: &Rc<Self>, do_not_disturb: bool) {
+        self.do_not_disturb.replace(do_not_disturb);
     }
 
     #[slot(SlotOfQVariant)]
-    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: cpp_core::Ref<QVariant>) {
-         let notification_hash = serialized_notification.to_hash();
+    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: Ref<QVariant>) {
+        let do_not_disturb = self.do_not_disturb.borrow();
+
+        if do_not_disturb.eq(&true) { return ;}
+
+        let notification_hash = serialized_notification.to_hash();
 
         let notification = Notification::from_qvariant(&notification_hash);
 
-         self.spawn_notification(
+        self.spawn_notification(
             notification.app_name, 
             notification.replaces_id, 
             notification.app_icon, 
@@ -91,6 +114,28 @@ impl NotificationSpawner {
             notification.expire_timeout, 
             notification.notification_id,
             notification.desktop_entry);
+    }
+
+    pub unsafe fn get_already_existing_notification<'a>(
+        self: &Rc<Self>, list: &'a MutexGuard<LinkedHashMap<String, Rc<NotificationWidget>>>, 
+        app_name: &String, 
+        replaces_id: u32) -> Option<&'a Rc<NotificationWidget>> {
+        for widget in list.values() {
+            let _replaces_id = widget.notification_id.borrow().to_owned();
+
+            if _replaces_id == replaces_id
+            {
+                return Some(widget);
+            }
+
+            if app_name.eq("discord") && _replaces_id == replaces_id - 1 // Fuck you Discord
+            {
+                widget.notification_id.replace(replaces_id);
+                return Some(widget);
+            }
+        }
+
+        None
     }
 
     pub unsafe fn spawn_notification(
@@ -107,18 +152,9 @@ impl NotificationSpawner {
         notification_id: u32,
         desktop_entry: String) {
 
-        let mut already_existing_notification: Option<&Rc<NotificationWidget>> = None;
-
         let mut list = self.widget_list.lock().unwrap();
 
-        println!("Current amount of notifications: {}", &list.len().to_string());
-
-        for widget in list.values() {
-            if widget.notification_id == replaces_id {
-                already_existing_notification = Some(widget);
-                break;
-            }
-        }
+        let already_existing_notification = self.get_already_existing_notification(&list, &app_name, replaces_id);
 
         if already_existing_notification.is_none() {
             let guid = Uuid::new_v4().to_string();
