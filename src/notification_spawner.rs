@@ -244,4 +244,17 @@ impl NotificationSpawner {
 
         self.reorder(); 
     }
+
+    #[slot(SlotOfInt)]
+    pub unsafe fn on_external_close(self : &Rc<Self>, notification_id: i32) {    
+        let list = self.widget_list.lock().unwrap();
+
+        for widget in list.values() {
+            let _notification_id = widget.notification_id.borrow().to_owned();
+            if _notification_id as i32 == notification_id {
+                widget.on_close();
+                break;
+            }
+        }
+    }
 }

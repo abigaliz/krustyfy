@@ -478,7 +478,7 @@ pub mod notifications {
         }
 
         #[slot(SlotNoArgs)]
-        unsafe fn on_close(self: &Rc<Self>) {
+        pub unsafe fn on_close(self: &Rc<Self>) {
             self.close_signal.emit(&qs(&self.guid));
         }
 

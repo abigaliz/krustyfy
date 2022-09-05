@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{error::Error};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -9,7 +10,7 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{ConnectionType, SignalOfQVariant, qs};
+use qt_core::{ConnectionType, SignalOfQVariant, qs, SignalOfInt};
 use qt_widgets::{QApplication, QSystemTrayIcon, QMenu, SlotOfQAction};
 
 mod notification_widget;
@@ -20,11 +21,20 @@ mod image_handler;
 //static 
 struct NotificationHandler {
     count: u32,
-    sender: Sender<Notification>,
+    new_notification_sender: Sender<Notification>,
+    closed_notification_sender: Sender<u32>,
 }
 
 #[dbus_interface(name = "org.freedesktop.Notifications")]
 impl NotificationHandler {
+    #[dbus_interface(name="CloseNotification")]
+    async fn close_notification(&mut self, notification_id: u32) -> zbus::fdo::Result<()>
+    {
+        self.closed_notification_sender.send(notification_id).await.unwrap();
+
+        Ok(())
+    }
+
     #[dbus_interface(name="Notify")]
     async fn notify(
         &mut self,
@@ -93,7 +103,7 @@ impl NotificationHandler {
             app_name, replaces_id, app_icon, summary, body, actions, image_data, image_path, expire_timeout, notification_id, desktop_entry
         };
         
-        self.sender.send(notification).await.unwrap();
+        self.new_notification_sender.send(notification).await.unwrap();
 
         Ok(notification_id)
     }
@@ -129,10 +139,11 @@ impl NotificationHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let (notification_sender, mut notification_receiver) = mpsc::channel(5);
+    let (new_notification_sender, mut new_notification_receiver) = mpsc::channel(5);
+    let (closed_notification_sender, mut closed_notification_receiver) = mpsc::channel(5);
     let (action_sender, mut action_receiver) = mpsc::unbounded_channel();
 
-    let notification_handler = NotificationHandler { count: 0, sender: notification_sender};
+    let notification_handler = NotificationHandler { count: 0, new_notification_sender, closed_notification_sender};
     let connection = ConnectionBuilder::session()?
         .name("org.freedesktop.Notifications")?
         .serve_at("/org/freedesktop/Notifications", notification_handler)?
@@ -156,14 +167,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
         spawner.init();
 
         let notitification_signal = SignalOfQVariant::new();
-
         notitification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_spawn_notification());
 
-        let signal = notitification_signal.as_raw_ref().unwrap();
+        let closed_notification_signal = SignalOfInt::new();
+        closed_notification_signal.connect_with_type(ConnectionType::QueuedConnection, &spawner.slot_on_external_close());
+
+        let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
         tokio::spawn(async move {
-            while let Some(message) = notification_receiver.recv().await { 
+            while let Some(message) = new_notification_receiver.recv().await { 
     
-                signal.emit(message.to_qvariant().as_ref());
+                ref_notification_signal.emit(message.to_qvariant().as_ref());
+            }
+        });
+
+        let ref_closed_notification_signal = closed_notification_signal.as_raw_ref().unwrap();
+        tokio::spawn(async move {
+            while let Some(message) = closed_notification_receiver.recv().await { 
+                tokio::time::sleep(Duration::from_millis(100)).await; // Wait in case it's meant to be replaced;
+                ref_closed_notification_signal.emit(message as i32);
             }
         });
 
