@@ -365,6 +365,7 @@ pub mod notifications {
 
         pub unsafe fn reset_timer(self: &Rc<Self>) {
             self.exit_animation_group.set_current_time(0);
+            self.exit_animation_group.start_0a();
         }
 
         #[slot(SlotNoArgs)]
