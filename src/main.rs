@@ -47,57 +47,52 @@ impl NotificationHandler {
         hints: HashMap<String, Value<'_>>,
         expire_timeout: i32,  ) -> zbus::fdo::Result<u32> {
 
-        let mut desktop_entry = String::new();
+        let desktop_entry = 
+            if hints.contains_key("desktop-entry") {
+                zbus::zvariant::Str::try_from(&hints["desktop-entry"]).ok().unwrap().to_string()
+            } else { String::new()};
 
-        if hints.contains_key("desktop-entry") {
-            desktop_entry = zbus::zvariant::Str::try_from(&hints["desktop-entry"]).ok().unwrap().to_string();
-        }
+        let image_data =
+            if hints.contains_key("image-data") {
+                let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap();
 
-        let mut image_data: Option<ImageData> = None;
+                let fields = image_structure.fields();
+                let width_value = &fields[0];
+                let height_value = &fields[1];
+                let rowstride_value = &fields[2];
+                let has_alpha_value = &fields[3];
+                let bits_per_sample_value = &fields[4];
+                let channels_value = &fields[5];
+                let data_value = &fields[6];
 
-        if hints.contains_key("image-data") {
-            let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"]).ok().unwrap();
+                let image_raw_bytes_array = Array::try_from(data_value).ok().unwrap().get().to_vec();
 
-            let fields = image_structure.fields();
-            let width_value = &fields[0];
-            let height_value = &fields[1];
-            let rowstride_value = &fields[2];
-            let has_alpha_value = &fields[3];
-            let bits_per_sample_value = &fields[4];
-            let channels_value = &fields[5];
-            let data_value = &fields[6];
+                
+                let width = i32::try_from(width_value).ok().unwrap();
+                let height = i32::try_from(height_value).ok().unwrap();
+                let rowstride = i32::try_from(rowstride_value).ok().unwrap();
+                let has_alpha = bool::try_from(has_alpha_value).ok().unwrap();
+                let bits_per_sample = i32::try_from(bits_per_sample_value).ok().unwrap();
+                let channels = i32::try_from(channels_value).ok().unwrap();
+                let mut data = Vec::new();
+                (&image_raw_bytes_array).iter().for_each(|f| {
+                    data.push(u8::try_from(f).ok().unwrap());
+                });
 
-            let image_raw_bytes_array = Array::try_from(data_value).ok().unwrap().get().to_vec();
+                Some(ImageData::new(width, height, rowstride, has_alpha, bits_per_sample, channels, data))
+            } else { None };
 
-            
-            let width = i32::try_from(width_value).ok().unwrap();
-            let height = i32::try_from(height_value).ok().unwrap();
-            let rowstride = i32::try_from(rowstride_value).ok().unwrap();
-            let has_alpha = bool::try_from(has_alpha_value).ok().unwrap();
-            let bits_per_sample = i32::try_from(bits_per_sample_value).ok().unwrap();
-            let channels = i32::try_from(channels_value).ok().unwrap();
-            let mut data = Vec::new();
-            (&image_raw_bytes_array).iter().for_each(|f| {
-                data.push(u8::try_from(f).ok().unwrap());
-            });
-
-            image_data = Some(ImageData::new(width, height, rowstride, has_alpha, bits_per_sample, channels, data));
-        }
-
-        let mut image_path: Option<String> = None;
-
-        if hints.contains_key("image-path") {
-            image_path = Some(zbus::zvariant::Str::try_from(&hints["image-path"]).ok().unwrap().to_string())
-        }
+        let image_path = 
+            if hints.contains_key("image-path") {
+                Some(zbus::zvariant::Str::try_from(&hints["image-path"]).ok().unwrap().to_string())
+            } else { None };
         
 
-        let mut notification_id = replaces_id;
-        
-
-        if notification_id == 0 {
-            self.count += 1;
-            notification_id = self.count;
-        }
+        let notification_id =
+            if replaces_id == 0 {
+                self.count += 1;
+                self.count
+            } else { replaces_id };
 
         let notification = notification::Notification {
             app_name, replaces_id, app_icon, summary, body, actions, image_data, image_path, expire_timeout, notification_id, desktop_entry
