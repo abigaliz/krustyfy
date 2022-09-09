@@ -14,9 +14,10 @@ use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{qs, ConnectionType, SignalOfInt, SignalOfQVariant};
+use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString};
 use qt_gui::QIcon;
 use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction};
+use uuid::Uuid;
 
 mod image_handler;
 mod notification;
@@ -215,7 +216,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let do_not_disturb = Arc::new(AtomicBool::new(false));
 
-        let notitification_signal = SignalOfQVariant::new();
+        let notitification_signal = SignalOfQString::new();
         notitification_signal.connect_with_type(
             ConnectionType::QueuedConnection,
             &spawner.slot_on_spawn_notification(),
@@ -229,10 +230,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let do_not_disturb_clone = do_not_disturb.clone();
         let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
+
         tokio::spawn(async move {
             while let Some(message) = new_notification_receiver.recv().await {
                 if !do_not_disturb_clone.load(Ordering::Relaxed) {
-                    ref_notification_signal.emit(message.to_qvariant().as_ref());
+                    let guid = Uuid::new_v4().to_string();
+                    let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
+                    list.insert(guid.clone(), message);
+                    ref_notification_signal.emit(&QString::from_std_str(&guid));
                 }
             }
         });

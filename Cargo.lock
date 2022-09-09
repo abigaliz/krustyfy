@@ -427,6 +427,7 @@ dependencies = [
  "cpp_core",
  "device_query",
  "glob",
+ "lazy_static",
  "linked-hash-map",
  "qt_core",
  "qt_gui",

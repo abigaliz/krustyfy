@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::{Mutex, MutexGuard};
 
@@ -7,9 +8,11 @@ use linked_hash_map::LinkedHashMap;
 
 use tokio::sync::mpsc::UnboundedSender;
 
+use lazy_static::lazy_static;
+
 use qt_core::{
-    qs, slot, ConnectionType, QBox, QObject, QString, QTimer, QVariant, SignalNoArgs, SignalOfInt,
-    SignalOfQString, SlotNoArgs, SlotOfInt, SlotOfQString, SlotOfQVariant,
+    qs, slot, ConnectionType, QBox, QObject, QString, QTimer, SignalNoArgs, SignalOfInt,
+    SignalOfQString, SlotNoArgs, SlotOfInt, SlotOfQString,
 };
 use uuid::Uuid;
 
@@ -18,6 +21,11 @@ use crate::{
     notification::{ImageData, Notification},
     notification_widget::notifications::NotificationWidget,
 };
+
+lazy_static! {
+    pub static ref NOTIFICATION_LIST: Mutex<HashMap<String, Notification>> =
+        Mutex::new(HashMap::new());
+}
 
 pub struct NotificationSpawner {
     widget_list: Mutex<LinkedHashMap<String, Rc<NotificationWidget>>>,
@@ -84,25 +92,30 @@ impl NotificationSpawner {
             .connect_with_type(ConnectionType::QueuedConnection, &self.slot_on_action());
     }
 
-    #[slot(SlotOfQVariant)]
-    pub unsafe fn on_spawn_notification(self: &Rc<Self>, serialized_notification: Ref<QVariant>) {
-        let notification_hash = serialized_notification.to_hash();
+    #[slot(SlotOfQString)]
+    pub unsafe fn on_spawn_notification(self: &Rc<Self>, guid: Ref<QString>) {
+        let mut list = NOTIFICATION_LIST.lock().unwrap();
+        let notification_option = list.remove(&guid.to_std_string());
 
-        let notification = Notification::from_qvariant(&notification_hash);
+        if notification_option.is_none() {
+            return;
+        } else {
+            let notification = notification_option.unwrap();
 
-        self.spawn_notification(
-            notification.app_name,
-            notification.replaces_id,
-            notification.app_icon,
-            notification.summary,
-            notification.body,
-            notification.actions,
-            notification.image_data,
-            notification.image_path,
-            notification.expire_timeout,
-            notification.notification_id,
-            notification.desktop_entry,
-        );
+            self.spawn_notification(
+                notification.app_name,
+                notification.replaces_id,
+                notification.app_icon,
+                notification.summary,
+                notification.body,
+                notification.actions,
+                notification.image_data,
+                notification.image_path,
+                notification.expire_timeout,
+                notification.notification_id,
+                notification.desktop_entry,
+            );
+        }
     }
 
     pub unsafe fn get_already_existing_notification<'a>(
