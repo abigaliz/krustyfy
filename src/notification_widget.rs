@@ -232,6 +232,7 @@ pub mod notifications {
 
                 widget.show();
                 overlay.show();
+                overlay.hide();
 
                 let close = close_signal.as_ref().unwrap();
                 let action = action_signal.as_ref().unwrap();
@@ -436,7 +437,6 @@ pub mod notifications {
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped
                     && self.parallel_hover_animation.current_time() == 0
                 {
-                    println!("Restarting hover animation");
                     self.parallel_hover_animation.start_0a();
                 }
             }
@@ -546,10 +546,16 @@ pub mod notifications {
         }
 
         unsafe fn freeze(self: &Rc<Self>) {
+            self.overlay.set_geometry_1a(self.widget.geometry());
+            self.action_button.set_geometry_4a(
+                0,
+                0,
+                self.widget.geometry().width(),
+                self.widget.geometry().height(),
+            );
             if self.overlay.is_visible() {
                 return;
             }
-            self.overlay.set_geometry_1a(self.widget.geometry());
             self.overlay.set_visible(true);
             if self.exit_animation_group.state() == q_abstract_animation::State::Paused {
                 return;
