@@ -38,8 +38,6 @@ pub mod notifications {
         blur_effect: QBox<QGraphicsBlurEffect>,
         action_button: QPtr<QPushButton>,
         pub notification_id: RefCell<u32>,
-        pub freeze_signal: QBox<SignalNoArgs>,
-        pub unfreeze_signal: QBox<SignalNoArgs>,
         pub overlay: QBox<QDialog>,
         frame_shadow: QBox<QGraphicsDropShadowEffect>,
         action_signal: Ref<SignalOfInt>,
@@ -231,8 +229,6 @@ pub mod notifications {
                 let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap();
 
                 let animate_entry_signal = SignalOfInt::new();
-                let freeze_signal = SignalNoArgs::new();
-                let unfreeze_signal = SignalNoArgs::new();
 
                 widget.show();
                 overlay.show();
@@ -263,8 +259,6 @@ pub mod notifications {
                     action_signal: action,
                     action_button,
                     notification_id,
-                    freeze_signal,
-                    unfreeze_signal,
                     overlay,
                     frame_shadow,
                     guid,
@@ -408,9 +402,9 @@ pub mod notifications {
             let keys: Vec<Keycode> = device_state.get_keys();
 
             if keys.contains(&Keycode::LAlt) {
-                self.freeze_signal.emit();
+                self.freeze();
             } else {
-                self.unfreeze_signal.emit();
+                self.unfreeze();
             }
 
             let pos = QCursor::pos_0a();
@@ -442,6 +436,7 @@ pub mod notifications {
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped
                     && self.parallel_hover_animation.current_time() == 0
                 {
+                    println!("Restarting hover animation");
                     self.parallel_hover_animation.start_0a();
                 }
             }
@@ -530,8 +525,6 @@ pub mod notifications {
             self.action_button
                 .clicked()
                 .connect(&self.slot_on_button_clicked());
-            self.freeze_signal.connect(&self.slot_on_freeze());
-            self.unfreeze_signal.connect(&self.slot_on_unfreeze());
         }
 
         #[slot(SlotNoArgs)]
@@ -552,8 +545,10 @@ pub mod notifications {
                 ));
         }
 
-        #[slot(SlotNoArgs)]
-        unsafe fn on_freeze(self: &Rc<Self>) {
+        unsafe fn freeze(self: &Rc<Self>) {
+            if self.overlay.is_visible() {
+                return;
+            }
             self.overlay.set_geometry_1a(self.widget.geometry());
             self.overlay.set_visible(true);
             if self.exit_animation_group.state() == q_abstract_animation::State::Paused {
@@ -566,8 +561,10 @@ pub mod notifications {
                 .set_window_opacity(self.default_opacity.to_double_0a());
         }
 
-        #[slot(SlotNoArgs)]
-        unsafe fn on_unfreeze(self: &Rc<Self>) {
+        unsafe fn unfreeze(self: &Rc<Self>) {
+            if !self.overlay.is_visible() {
+                return;
+            }
             self.overlay.set_visible(false);
             self.frame_shadow.set_blur_radius(10.0);
 
@@ -575,6 +572,7 @@ pub mod notifications {
 
             self.frame_shadow.set_color(&color);
             self.frame_shadow.set_offset_2_double(1.0, 1.0);
+            self.parallel_hover_animation.set_current_time(0);
             if self.exit_animation_group.state() != q_abstract_animation::State::Paused {
                 return;
             }
