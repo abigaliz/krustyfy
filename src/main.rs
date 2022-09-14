@@ -5,19 +5,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString};
+use qt_gui::QIcon;
+use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
 };
+use uuid::Uuid;
 use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString};
-use qt_gui::QIcon;
-use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction};
-use uuid::Uuid;
 
 mod image_handler;
 mod notification;
@@ -232,11 +232,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
 
         tokio::spawn(async move {
-            while let Some(message) = new_notification_receiver.recv().await {
+            while let Some(notification) = new_notification_receiver.recv().await {
                 if !do_not_disturb_clone.load(Ordering::Relaxed) {
                     let guid = Uuid::new_v4().to_string();
                     let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
-                    list.insert(guid.clone(), message);
+                    list.insert(guid.clone(), notification);
                     ref_notification_signal.emit(&QString::from_std_str(&guid));
                 }
             }
@@ -245,9 +245,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let ref_closed_notification_signal = closed_notification_signal.as_raw_ref().unwrap();
 
         tokio::spawn(async move {
-            while let Some(message) = closed_notification_receiver.recv().await {
+            while let Some(notification_id) = closed_notification_receiver.recv().await {
                 tokio::time::sleep(Duration::from_millis(100)).await; // Wait in case it's meant to be replaced;
-                ref_closed_notification_signal.emit(message as i32);
+                ref_closed_notification_signal.emit(notification_id as i32);
             }
         });
 

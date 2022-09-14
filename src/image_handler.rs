@@ -29,7 +29,9 @@ pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
         if info.exists_0a() {
             let icon = icon_provider.icon_q_file_info(info.as_ref());
 
-            return icon.pixmap_int(64);
+            let pixmap = icon.pixmap_int(64);
+
+            return pixmap;
         }
 
         return QIcon::from_theme_1a(QString::from_std_str(DEFAULT_ICON).as_ref()).pixmap_int(64);
@@ -38,7 +40,7 @@ pub unsafe fn find_icon(desktop_entry: &String) -> CppBox<QPixmap> {
     QIcon::from_theme_1a(icon_name).pixmap_int(64)
 }
 
-pub unsafe fn parse_image(image_data: &ImageData) -> CppBox<QPixmap> {
+pub unsafe fn parse_image(image_data: ImageData) -> CppBox<QPixmap> {
     let pixmap = QPixmap::new();
 
     let image_format = if image_data.has_alpha {
@@ -58,6 +60,7 @@ pub unsafe fn parse_image(image_data: &ImageData) -> CppBox<QPixmap> {
     );
 
     pixmap.convert_from_image_1a(qimage.as_ref());
+
     pixmap
 }
 
@@ -67,5 +70,6 @@ pub unsafe fn load_image(image_path: String) -> CppBox<QPixmap> {
     let qimage = QImage::from_q_string(&qs(image_path));
 
     pixmap.convert_from_image_1a(qimage.as_ref());
+
     pixmap
 }

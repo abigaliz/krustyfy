@@ -1,4 +1,5 @@
 pub mod notifications {
+    use std::ffi::{CStr, CString};
     use std::{cell::RefCell, rc::Rc};
 
     use cpp_core::{CppBox, CppDeletable, Ptr, Ref, StaticUpcast};
@@ -96,60 +97,35 @@ pub mod notifications {
                 template_file.reset();
                 template_file.close();
                 template_file.delete();
+                loader.delete();
 
-                let properties = template.dynamic_property_names().iter();
+                // Load properties
+                let default_opacity =
+                    template.property(CStr::as_ptr(&CString::new("defaultOpacity").unwrap()));
+                let hovered_opacity =
+                    template.property(CStr::as_ptr(&CString::new("hoveredOpacity").unwrap()));
+                let default_blur =
+                    template.property(CStr::as_ptr(&CString::new("defaultBlur").unwrap()));
+                let hovered_blur =
+                    template.property(CStr::as_ptr(&CString::new("hoveredBlur").unwrap()));
+                let default_monitor =
+                    template.property(CStr::as_ptr(&CString::new("defaultMonitor").unwrap()));
+                let end_blur = template.property(CStr::as_ptr(&CString::new("endBlur").unwrap()));
+                let notification_duration =
+                    template.property(CStr::as_ptr(&CString::new("notificationDuration").unwrap()));
+                let spawn_duration =
+                    template.property(CStr::as_ptr(&CString::new("spawnDuration").unwrap()));
+                let disappear_duration =
+                    template.property(CStr::as_ptr(&CString::new("disappearDuration").unwrap()));
+                let default_shadow_color =
+                    template.property(CStr::as_ptr(&CString::new("defaultShadowColor").unwrap()));
+                let focused_shadow_color =
+                    template.property(CStr::as_ptr(&CString::new("focusedShadowColor").unwrap()));
 
-                let mut default_opacity: CppBox<QVariant> = QVariant::new();
-                let mut hovered_opacity: CppBox<QVariant> = QVariant::new();
-                let mut default_blur: CppBox<QVariant> = QVariant::new();
-                let mut hovered_blur: CppBox<QVariant> = QVariant::new();
-                let mut default_monitor: CppBox<QVariant> = QVariant::new();
-                let mut end_blur: CppBox<QVariant> = QVariant::new();
-                let mut notification_duration: CppBox<QVariant> = QVariant::new();
-                let mut spawn_duration: CppBox<QVariant> = QVariant::new();
-                let mut disappear_duration: CppBox<QVariant> = QVariant::new();
-                let mut focused_shadow_color: CppBox<QVariant> = QVariant::new();
-                let mut default_shadow_color: CppBox<QVariant> = QVariant::new();
+                let desktop = QApplication::desktop();
 
-                for property in properties {
-                    if property.index_of_q_string(&qs("defaultOpacity")) > -1 {
-                        default_opacity = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("hoveredOpacity")) > -1 {
-                        hovered_opacity = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("defaultBlur")) > -1 {
-                        default_blur = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("hoveredBlur")) > -1 {
-                        hovered_blur = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("defaultMonitor")) > -1 {
-                        default_monitor = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("endBlur")) > -1 {
-                        end_blur = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("notificationDuration")) > -1 {
-                        notification_duration = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("spawnDuration")) > -1 {
-                        spawn_duration = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("disappearDuration")) > -1 {
-                        disappear_duration = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("defaultShadowColor")) > -1 {
-                        default_shadow_color = template.property(property.to_char());
-                    }
-                    if property.index_of_q_string(&qs("focusedShadowColor")) > -1 {
-                        focused_shadow_color = template.property(property.to_char());
-                    }
-                }
-
-                let topleft = QApplication::desktop()
-                    .screen_1a(default_monitor.to_int_0a())
-                    .geometry()
+                let topleft = desktop
+                    .screen_geometry_int(default_monitor.to_int_0a())
                     .top_left();
 
                 let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
@@ -180,7 +156,7 @@ pub mod notifications {
                 let action_button: QPtr<QPushButton> =
                     overlay_widget.find_child("pushButton").unwrap();
 
-                let blur_effect = qt_widgets::QGraphicsBlurEffect::new_1a(&widget);
+                let blur_effect = QGraphicsBlurEffect::new_1a(&widget);
                 blur_effect.set_object_name(&qs("blur_effect"));
 
                 widget.set_graphics_effect(&blur_effect);
@@ -265,6 +241,9 @@ pub mod notifications {
                 let action = action_signal.as_ref().unwrap();
 
                 let notification_id = RefCell::new(_notification_id);
+
+                template.close();
+                template.delete();
 
                 let this = Rc::new(Self {
                     widget,

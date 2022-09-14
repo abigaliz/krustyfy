@@ -224,7 +224,7 @@ impl NotificationSpawner {
             notification_widget.set_content_no_image(qs(app_name), qs(summary), qs(body), icon);
         } else {
             let pixmap = if image_data.is_some() {
-                image_handler::parse_image(&image_data.unwrap())
+                image_handler::parse_image(image_data.unwrap())
             } else {
                 image_handler::load_image(image_path.unwrap())
             };
