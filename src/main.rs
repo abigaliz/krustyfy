@@ -254,8 +254,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             while let Some(method) = dbus_method_receiver.recv().await {
                 match method {
                     DbusMethod::CloseNotification { notification_id } => {
-                        tokio::time::sleep(Duration::from_millis(100)).await; // Wait in case it's meant to be replaced;
-                        ref_closed_notification_signal.emit(notification_id as i32);
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                            ref_closed_notification_signal.emit(notification_id as i32);
+                        });
                     }
                     DbusMethod::Notify { notification } => {
                         if !do_not_disturb_clone.load(Ordering::Relaxed) {
