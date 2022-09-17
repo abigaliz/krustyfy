@@ -51,6 +51,7 @@ pub mod notifications {
         disappear_duration: CppBox<QVariant>,
         default_shadow_color: CppBox<QVariant>,
         focused_shadow_color: CppBox<QVariant>,
+        pub close_reason: RefCell<u32>,
     }
 
     impl StaticUpcast<QObject> for NotificationWidget {
@@ -272,6 +273,7 @@ pub mod notifications {
                     disappear_duration,
                     default_shadow_color,
                     focused_shadow_color,
+                    close_reason: RefCell::new(1),
                 });
                 this.init();
                 this.animate_exit();

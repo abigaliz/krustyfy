@@ -16,9 +16,11 @@ use uuid::Uuid;
 use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
+use crate::dbus_signal::{DbusMethod, DbusSignal};
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
 
+mod dbus_signal;
 mod image_handler;
 mod notification;
 mod notification_spawner;
@@ -27,16 +29,15 @@ mod notification_widget;
 //static
 struct NotificationHandler {
     count: u32,
-    new_notification_sender: Sender<Notification>,
-    closed_notification_sender: Sender<u32>,
+    dbus_method_sender: Sender<DbusMethod>,
 }
 
 #[dbus_interface(name = "org.freedesktop.Notifications")]
 impl NotificationHandler {
     #[dbus_interface(name = "CloseNotification")]
     async fn close_notification(&mut self, notification_id: u32) -> zbus::fdo::Result<()> {
-        self.closed_notification_sender
-            .send(notification_id)
+        self.dbus_method_sender
+            .send(DbusMethod::CloseNotification { notification_id })
             .await
             .unwrap();
 
@@ -136,8 +137,8 @@ impl NotificationHandler {
             desktop_entry,
         };
 
-        self.new_notification_sender
-            .send(notification)
+        self.dbus_method_sender
+            .send(DbusMethod::Notify { notification })
             .await
             .unwrap();
 
@@ -179,14 +180,12 @@ impl NotificationHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let (new_notification_sender, mut new_notification_receiver) = mpsc::channel(5);
-    let (closed_notification_sender, mut closed_notification_receiver) = mpsc::channel(5);
-    let (action_sender, mut action_receiver) = mpsc::unbounded_channel();
+    let (dbus_method_sender, mut dbus_method_receiver) = mpsc::channel(5);
+    let (dbus_signal_sender, mut dbus_signal_receiver) = mpsc::unbounded_channel();
 
     let notification_handler = NotificationHandler {
         count: 0,
-        new_notification_sender,
-        closed_notification_sender,
+        dbus_method_sender,
     };
     let connection = ConnectionBuilder::session()?
         .name("org.freedesktop.Notifications")?
@@ -195,22 +194,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await?;
 
     tokio::spawn(async move {
-        while let Some(message) = action_receiver.recv().await {
-            connection
-                .emit_signal(
-                    None::<()>,
-                    "/org/freedesktop/Notifications",
-                    "org.freedesktop.Notifications",
-                    "ActionInvoked",
-                    &(message as u32, "default"),
-                )
-                .await
-                .unwrap();
+        while let Some(signal) = dbus_signal_receiver.recv().await {
+            match signal {
+                DbusSignal::ActionInvoked { notification_id } => {
+                    connection
+                        .emit_signal(
+                            None::<()>,
+                            "/org/freedesktop/Notifications",
+                            "org.freedesktop.Notifications",
+                            "ActionInvoked",
+                            &(notification_id as u32, "default"),
+                        )
+                        .await
+                        .unwrap();
+                }
+                DbusSignal::NotificationClosed {
+                    notification_id,
+                    reason,
+                } => {
+                    connection
+                        .emit_signal(
+                            None::<()>,
+                            "/org/freedesktop/Notifications",
+                            "org.freedesktop.Notifications",
+                            "NotificationClosed",
+                            &(notification_id, reason),
+                        )
+                        .await
+                        .unwrap();
+                }
+            }
         }
     });
 
     QApplication::init(|_app| unsafe {
-        let spawner = NotificationSpawner::new(action_sender);
+        let spawner = NotificationSpawner::new(dbus_signal_sender);
 
         spawner.init();
 
@@ -230,24 +248,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let do_not_disturb_clone = do_not_disturb.clone();
         let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
-
-        tokio::spawn(async move {
-            while let Some(notification) = new_notification_receiver.recv().await {
-                if !do_not_disturb_clone.load(Ordering::Relaxed) {
-                    let guid = Uuid::new_v4().to_string();
-                    let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
-                    list.insert(guid.clone(), notification);
-                    ref_notification_signal.emit(&QString::from_std_str(&guid));
-                }
-            }
-        });
-
         let ref_closed_notification_signal = closed_notification_signal.as_raw_ref().unwrap();
 
         tokio::spawn(async move {
-            while let Some(notification_id) = closed_notification_receiver.recv().await {
-                tokio::time::sleep(Duration::from_millis(100)).await; // Wait in case it's meant to be replaced;
-                ref_closed_notification_signal.emit(notification_id as i32);
+            while let Some(method) = dbus_method_receiver.recv().await {
+                match method {
+                    DbusMethod::CloseNotification { notification_id } => {
+                        tokio::time::sleep(Duration::from_millis(100)).await; // Wait in case it's meant to be replaced;
+                        ref_closed_notification_signal.emit(notification_id as i32);
+                    }
+                    DbusMethod::Notify { notification } => {
+                        if !do_not_disturb_clone.load(Ordering::Relaxed) {
+                            let guid = Uuid::new_v4().to_string();
+                            let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
+                            list.insert(guid.clone(), notification);
+                            ref_notification_signal.emit(&QString::from_std_str(&guid));
+                        }
+                    }
+                }
             }
         });
 

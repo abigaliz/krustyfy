@@ -17,6 +17,7 @@ use qt_core::{
 use uuid::Uuid;
 
 use crate::{
+    dbus_signal::DbusSignal,
     image_handler,
     notification::{ImageData, Notification},
     notification_widget::notifications::NotificationWidget,
@@ -30,7 +31,7 @@ lazy_static! {
 pub struct NotificationSpawner {
     widget_list: Mutex<LinkedHashMap<String, Rc<NotificationWidget>>>,
     check_hover: QBox<SignalNoArgs>,
-    action_sender: UnboundedSender<i32>,
+    signal_sender: UnboundedSender<DbusSignal>,
     timer: QBox<QTimer>,
     reorder_signal: QBox<SignalNoArgs>,
     action_signal: QBox<SignalOfInt>,
@@ -45,7 +46,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(action_sender: UnboundedSender<i32>) -> Rc<NotificationSpawner> {
+    pub fn new(signal_sender: UnboundedSender<DbusSignal>) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -67,7 +68,7 @@ impl NotificationSpawner {
             Rc::new(Self {
                 widget_list,
                 check_hover,
-                action_sender,
+                signal_sender,
                 timer,
                 reorder_signal,
                 action_signal,
@@ -256,18 +257,27 @@ impl NotificationSpawner {
 
     #[slot(SlotOfInt)]
     unsafe fn on_action(self: &Rc<Self>, notifcation_id: i32) {
-        self.action_sender.send(notifcation_id).unwrap();
+        self.signal_sender
+            .send(DbusSignal::ActionInvoked {
+                notification_id: notifcation_id,
+            })
+            .unwrap();
     }
 
     #[slot(SlotOfQString)]
     unsafe fn on_widget_close(self: &Rc<Self>, closed_widget: Ref<QString>) {
         let mut list = self.widget_list.lock().unwrap();
 
-        let widget = &list[&closed_widget.to_std_string()];
+        let widget = list.remove(&closed_widget.to_std_string()).unwrap();
         widget.widget.close();
         widget.overlay.close();
 
-        list.remove(&closed_widget.to_std_string());
+        self.signal_sender
+            .send(DbusSignal::NotificationClosed {
+                notification_id: widget.notification_id.take(),
+                reason: widget.close_reason.take(),
+            })
+            .unwrap();
 
         self.reorder();
     }
@@ -279,6 +289,7 @@ impl NotificationSpawner {
         for widget in list.values() {
             let _notification_id = widget.notification_id.borrow().to_owned();
             if _notification_id as i32 == notification_id {
+                widget.close_reason.replace(3);
                 widget.on_close();
                 break;
             }
