@@ -120,6 +120,8 @@ pub mod notifications {
                     template.property(CStr::as_ptr(&CString::new("defaultShadowColor").unwrap()));
                 let focused_shadow_color =
                     template.property(CStr::as_ptr(&CString::new("focusedShadowColor").unwrap()));
+                let text_shadow_color =
+                    template.property(CStr::as_ptr(&CString::new("textShadowColor").unwrap()));
 
                 let desktop = QApplication::desktop();
 
@@ -231,7 +233,7 @@ pub mod notifications {
                 app_name_label_shadow.set_blur_radius(1.0);
                 app_name_label_shadow.set_x_offset(0.0);
                 app_name_label_shadow.set_y_offset(0.0);
-                app_name_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+                app_name_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                 app_name_label.set_graphics_effect(&app_name_label_shadow);
 
@@ -244,7 +246,7 @@ pub mod notifications {
                 title_label_shadow.set_blur_radius(1.0);
                 title_label_shadow.set_x_offset(0.0);
                 title_label_shadow.set_y_offset(0.0);
-                title_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+                title_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                 title_label.set_graphics_effect(&title_label_shadow);
 
@@ -257,7 +259,7 @@ pub mod notifications {
                 body_label_shadow.set_blur_radius(1.0);
                 body_label_shadow.set_x_offset(0.0);
                 body_label_shadow.set_y_offset(0.0);
-                body_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+                body_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                 body_label.set_graphics_effect(&body_label_shadow);
 
