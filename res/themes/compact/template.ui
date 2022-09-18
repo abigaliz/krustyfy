@@ -314,8 +314,8 @@ border-style: none;</string>
    <widget class="QLabel" name="iconLabel">
     <property name="geometry">
      <rect>
-      <x>10</x>
-      <y>10</y>
+      <x>12</x>
+      <y>12</y>
       <width>20</width>
       <height>20</height>
      </rect>
