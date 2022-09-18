@@ -14,13 +14,28 @@ https://user-images.githubusercontent.com/112440538/188256590-9793e49d-8265-4d85
 
 ## Configuration
 
-Most settings can be changed directly from the **res/template.ui** config file. From the layout of the notification itself to settings like duration, monitor, shadow color, etc. More settings comming soon. :)
+Most settings can be changed directly from the **res/themes/{current theme}/template.ui** config file. From the layout of the notification itself to settings like duration, monitor, shadow color, etc. More settings comming soon. :)
 
 <p align="center">
   <img src="https://user-images.githubusercontent.com/112440538/188322780-06a043c8-4b3f-449d-9853-3154f8788b0b.png">
 </p>
 
 Take into account that some widgets MUST exist in the template.ui file, otherwise it'll crash. Modify it wisely.
+
+
+
+## Theming
+
+Themes are located in the **res/themes** subdirectory. Each folder corresponds to a theme, which must have a **template.ui** file. Themes are loaded when the app is launched, and can be changed from the system tray:
+
+![themes](https://user-images.githubusercontent.com/112440538/190928867-c006a63a-97ee-4eb5-8e2a-ccf012671547.png)
+
+Currently we have two built in themes: **default** and **compact**, and they can be changed, and even modified, while the app is running:
+
+
+
+https://user-images.githubusercontent.com/112440538/190928912-c352c2ad-a002-4d9a-aed8-0429989bc1d5.mp4
+
 
 
 ## Name
