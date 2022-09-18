@@ -2,12 +2,13 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString};
+use qt_core::q_dir::Filter;
+use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant};
 use qt_gui::QIcon;
-use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction};
+use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
@@ -19,6 +20,8 @@ use zvariant::Value;
 use crate::dbus_signal::{DbusMethod, DbusSignal};
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
+
+use lazy_static::lazy_static;
 
 mod dbus_signal;
 mod image_handler;
@@ -178,6 +181,10 @@ impl NotificationHandler {
     }
 }
 
+lazy_static! {
+    pub static ref THEME : Mutex<String> = Mutex::new("default".to_string());
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let (dbus_method_sender, mut dbus_method_receiver) = mpsc::channel(5);
@@ -279,6 +286,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let tray_menu = QMenu::new();
 
+        let theme_menu = tray_menu.add_menu_q_string(&qs("Themes"));
+
+        let theme_action_group = QActionGroup::new(&theme_menu);
+        theme_action_group.set_exclusive(true);
+
+        let theme_directories = QDirIterator::from_q_string_q_flags_filter(&qs("./res/themes"), Filter::AllDirs | Filter::NoDotAndDotDot);
+
+        while theme_directories.has_next() {
+            let theme = QDir::new_1a(&theme_directories.next());
+
+            let theme_action = theme_menu.add_action_q_string(&theme.dir_name());
+
+            theme_action.set_object_name(&qs("set_theme"));
+            theme_action.set_checkable(true);
+            theme_action.set_data(&QVariant::from_q_string(&theme.dir_name()));
+
+            theme_action_group.add_action_q_action(theme_action.as_ptr());
+        }
+
         let do_not_disturb_action = tray_menu.add_action_q_string(&qs("Do not disturb"));
         do_not_disturb_action.set_object_name(&qs("do_not_disturb_action"));
         do_not_disturb_action.set_checkable(true);
@@ -298,6 +324,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 if action.object_name().to_std_string() == "do_not_disturb_action".to_string() {
                     do_not_disturb.store(do_not_disturb_action.is_checked(), Ordering::Relaxed);
+                }
+
+                if action.object_name().to_std_string() == "set_theme".to_string() {
+                    let mut _theme = THEME.lock().expect("Could not lock mutex");
+
+                    *_theme = action.data().to_string().to_std_string();
                 }
             }));
 

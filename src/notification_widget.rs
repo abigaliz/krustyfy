@@ -18,6 +18,8 @@ pub mod notifications {
         QPushButton, QStackedLayout, QWidget,
     };
 
+    use crate::THEME;
+
     #[derive(Debug)]
     pub struct NotificationWidget {
         pub widget: QBox<QDialog>,
@@ -89,7 +91,9 @@ pub mod notifications {
 
                 widget.set_layout(widget_layout.as_ptr());
 
-                let template_file = QFile::from_q_string(&qs("./res/template.ui"));
+                let theme = THEME.lock().expect("Couldn't lock theme file");
+
+                let template_file = QFile::from_q_string(&qs(format!("./res/themes/{theme}/template.ui")));
                 template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
                 let loader = qt_ui_tools::QUiLoader::new_1a(&widget);
                 let template = loader.load_1a(template_file.as_ptr());
@@ -224,44 +228,53 @@ pub mod notifications {
                 frame.set_graphics_effect(&frame_shadow);
 
                 // Set up content
-                let icon_label: QPtr<QLabel> = widget.find_child("iconLabel").unwrap();
-                let app_name_label: QPtr<QLabel> = widget.find_child("appNameLabel").unwrap();
+                let icon_label: QPtr<QLabel> = widget.find_child("iconLabel").unwrap_or(QPtr::null());
+                let app_name_label: QPtr<QLabel> = widget.find_child("appNameLabel").unwrap_or(QPtr::null());
 
-                let app_name_label_shadow = QGraphicsDropShadowEffect::new_1a(&app_name_label);
-                app_name_label_shadow.set_object_name(&qs("app_name_label_shadow"));
+                if !app_name_label.is_null() {
+                    let app_name_label_shadow = QGraphicsDropShadowEffect::new_1a(&app_name_label);
+                    app_name_label_shadow.set_object_name(&qs("app_name_label_shadow"));
 
-                app_name_label_shadow.set_blur_radius(1.0);
-                app_name_label_shadow.set_x_offset(0.0);
-                app_name_label_shadow.set_y_offset(0.0);
-                app_name_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                    app_name_label_shadow.set_blur_radius(1.0);
+                    app_name_label_shadow.set_x_offset(0.0);
+                    app_name_label_shadow.set_y_offset(0.0);
+                    app_name_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
-                app_name_label.set_graphics_effect(&app_name_label_shadow);
+                    app_name_label.set_graphics_effect(&app_name_label_shadow);
+                }
 
-                let image_label: QPtr<QLabel> = widget.find_child("imageLabel").unwrap();
-                let title_label: QPtr<QLabel> = widget.find_child("titleLabel").unwrap();
+                let image_label: QPtr<QLabel> = widget.find_child("imageLabel").unwrap_or(QPtr::null());
 
-                let title_label_shadow = QGraphicsDropShadowEffect::new_1a(&title_label);
-                title_label_shadow.set_object_name(&qs("title_label_shadow"));
+                let title_label: QPtr<QLabel> = widget.find_child("titleLabel").unwrap_or(QPtr::null());
 
-                title_label_shadow.set_blur_radius(1.0);
-                title_label_shadow.set_x_offset(0.0);
-                title_label_shadow.set_y_offset(0.0);
-                title_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                if !title_label.is_null() {
+                    let title_label_shadow = QGraphicsDropShadowEffect::new_1a(&title_label);
 
-                title_label.set_graphics_effect(&title_label_shadow);
+                    title_label_shadow.set_object_name(&qs("title_label_shadow"));
 
+                    title_label_shadow.set_blur_radius(1.0);
+                    title_label_shadow.set_x_offset(0.0);
+                    title_label_shadow.set_y_offset(0.0);
+                    title_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
-                let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap();
+                    title_label.set_graphics_effect(&title_label_shadow);
+                }
+                
 
-                let body_label_shadow = QGraphicsDropShadowEffect::new_1a(&body_label);
-                body_label_shadow.set_object_name(&qs("body_label_shadow"));
+                let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap_or(QPtr::null());
 
-                body_label_shadow.set_blur_radius(1.0);
-                body_label_shadow.set_x_offset(0.0);
-                body_label_shadow.set_y_offset(0.0);
-                body_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                if !body_label.is_null() {
+                    let body_label_shadow = QGraphicsDropShadowEffect::new_1a(&body_label);
+                    body_label_shadow.set_object_name(&qs("body_label_shadow"));
 
-                body_label.set_graphics_effect(&body_label_shadow);
+                    body_label_shadow.set_blur_radius(1.0);
+                    body_label_shadow.set_x_offset(0.0);
+                    body_label_shadow.set_y_offset(0.0);
+                    body_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+
+                    body_label.set_graphics_effect(&body_label_shadow);
+                }
+                
 
                 let animate_entry_signal = SignalOfInt::new();
 
@@ -317,13 +330,15 @@ pub mod notifications {
 
         #[slot(SlotNoArgs)]
         unsafe fn ellide(self: &Rc<Self>) {
-            let ellided_title = self.title_label.font_metrics().elided_text_3a(
-                &self.title_label.text(),
-                TextElideMode::ElideRight,
-                self.title_label.width(),
-            );
-
-            self.title_label.set_text(&ellided_title);
+            if !self.title_label.is_null() {
+                let ellided_title = self.title_label.font_metrics().elided_text_3a(
+                    &self.title_label.text(),
+                    TextElideMode::ElideRight,
+                    self.title_label.width(),
+                );
+    
+                self.title_label.set_text(&ellided_title);
+            }
         }
 
         unsafe fn set_content(
@@ -333,19 +348,29 @@ pub mod notifications {
             body: CppBox<QString>,
             icon: CppBox<QPixmap>,
         ) {
-            self.app_name_label.set_text(&app_name);
-            self.body_label.set_text(&body);
+            if !self.app_name_label.is_null() { 
+                self.app_name_label.set_text(&app_name);
+            }
 
-            self.title_label.set_text(&title);
+            if !self.body_label.is_null() {
+                self.body_label.set_text(&body);
+            }
 
-            let scaled_icon = icon.scaled_2_int_aspect_ratio_mode_transformation_mode(
-                self.icon_label.width(),
-                self.icon_label.height(),
-                AspectRatioMode::IgnoreAspectRatio,
-                TransformationMode::SmoothTransformation,
-            );
+            if !self.title_label.is_null() {
+                self.title_label.set_text(&title);
+            }
 
-            self.icon_label.set_pixmap(&scaled_icon);
+            if !self.icon_label.is_null() {
+                let scaled_icon = icon.scaled_2_int_aspect_ratio_mode_transformation_mode(
+                    self.icon_label.width(),
+                    self.icon_label.height(),
+                    AspectRatioMode::IgnoreAspectRatio,
+                    TransformationMode::SmoothTransformation,
+                );
+    
+                self.icon_label.set_pixmap(&scaled_icon);
+            }
+            
 
             let signal = SignalNoArgs::new();
             signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_ellide());
@@ -370,18 +395,20 @@ pub mod notifications {
             image: CppBox<QPixmap>,
             icon: CppBox<QPixmap>,
         ) {
-            let scaled_image = self.resize_image(image);
+            if !self.image_label.is_null() {
+                let scaled_image = self.resize_image(image);
 
-            self.image_label.set_pixmap(&scaled_image);
-
-            self.image_label.set_maximum_size_2a(
-                self.image_label.maximum_height(),
-                self.image_label.maximum_height(),
-            );
-            self.image_label.set_minimum_size_2a(
-                self.image_label.maximum_height(),
-                self.image_label.maximum_height(),
-            );
+                self.image_label.set_pixmap(&scaled_image);
+    
+                self.image_label.set_maximum_size_2a(
+                    self.image_label.maximum_height(),
+                    self.image_label.maximum_height(),
+                );
+                self.image_label.set_minimum_size_2a(
+                    self.image_label.maximum_height(),
+                    self.image_label.maximum_height(),
+                );
+            }            
 
             self.set_content(app_name, title, body, icon);
         }
