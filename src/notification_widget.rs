@@ -224,10 +224,42 @@ pub mod notifications {
                 // Set up content
                 let icon_label: QPtr<QLabel> = widget.find_child("iconLabel").unwrap();
                 let app_name_label: QPtr<QLabel> = widget.find_child("appNameLabel").unwrap();
+
+                let app_name_label_shadow = QGraphicsDropShadowEffect::new_1a(&app_name_label);
+                app_name_label_shadow.set_object_name(&qs("app_name_label_shadow"));
+
+                app_name_label_shadow.set_blur_radius(1.0);
+                app_name_label_shadow.set_x_offset(0.0);
+                app_name_label_shadow.set_y_offset(0.0);
+                app_name_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+
+                app_name_label.set_graphics_effect(&app_name_label_shadow);
+
                 let image_label: QPtr<QLabel> = widget.find_child("imageLabel").unwrap();
                 let title_label: QPtr<QLabel> = widget.find_child("titleLabel").unwrap();
 
+                let title_label_shadow = QGraphicsDropShadowEffect::new_1a(&title_label);
+                title_label_shadow.set_object_name(&qs("title_label_shadow"));
+
+                title_label_shadow.set_blur_radius(1.0);
+                title_label_shadow.set_x_offset(0.0);
+                title_label_shadow.set_y_offset(0.0);
+                title_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+
+                title_label.set_graphics_effect(&title_label_shadow);
+
+
                 let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap();
+
+                let body_label_shadow = QGraphicsDropShadowEffect::new_1a(&body_label);
+                body_label_shadow.set_object_name(&qs("body_label_shadow"));
+
+                body_label_shadow.set_blur_radius(1.0);
+                body_label_shadow.set_x_offset(0.0);
+                body_label_shadow.set_y_offset(0.0);
+                body_label_shadow.set_color(&QColor::from_3_int(0, 0, 0));
+
+                body_label.set_graphics_effect(&body_label_shadow);
 
                 let animate_entry_signal = SignalOfInt::new();
 
