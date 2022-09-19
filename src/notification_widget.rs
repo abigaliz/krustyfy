@@ -336,7 +336,7 @@ pub mod notifications {
                     TextElideMode::ElideRight,
                     self.title_label.width(),
                 );
-    
+                
                 self.title_label.set_text(&ellided_title);
             }
         }

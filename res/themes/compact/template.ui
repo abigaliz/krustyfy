@@ -118,7 +118,7 @@ border-style: none;</string>
         <x>0</x>
         <y>0</y>
         <width>270</width>
-        <height>62</height>
+        <height>70</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -130,7 +130,7 @@ border-style: none;</string>
         <number>1</number>
        </property>
        <property name="sizeConstraint">
-        <enum>QLayout::SetFixedSize</enum>
+        <enum>QLayout::SetMaximumSize</enum>
        </property>
        <property name="leftMargin">
         <number>4</number>
@@ -238,7 +238,7 @@ border-style: none;</string>
             </property>
             <property name="maximumSize">
              <size>
-              <width>280</width>
+              <width>227</width>
               <height>20</height>
              </size>
             </property>
