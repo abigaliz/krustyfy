@@ -80,7 +80,7 @@ pub mod notifications {
                         | WindowType::WindowStaysOnTopHint
                         | WindowType::Tool
                         | WindowType::FramelessWindowHint
-                        | WindowType::X11BypassWindowManagerHint,
+                        | WindowType::BypassWindowManagerHint,
                 );
 
                 widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
