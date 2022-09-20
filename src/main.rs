@@ -235,10 +235,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     QApplication::init(|_app| unsafe {
-        let settings = QSettings::new();
-
-        QCoreApplication::set_organization_name(&qs("abigaliz"));
+        QCoreApplication::set_organization_name(&qs(env!("CARGO_PKG_NAME")));
         QCoreApplication::set_application_name(&qs(env!("CARGO_PKG_NAME")));
+
+        let settings = QSettings::new();
 
         let theme_setting = settings.value_1a(&qs("theme"));
 
