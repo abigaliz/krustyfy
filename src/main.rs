@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qt_core::q_dir::Filter;
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant};
+use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant, QSettings, QCoreApplication};
 use qt_gui::QIcon;
 use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup};
 use tokio::{
@@ -235,6 +235,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     QApplication::init(|_app| unsafe {
+        let settings = QSettings::new();
+
+        QCoreApplication::set_organization_name(&qs("abigaliz"));
+        QCoreApplication::set_application_name(&qs(env!("CARGO_PKG_NAME")));
+
+        let theme_setting = settings.value_1a(&qs("theme"));
+
+        if theme_setting.is_null() {
+            theme_setting.set_value(&QVariant::from_q_string(&qs("default")));
+        }
+
         let spawner = NotificationSpawner::new(dbus_signal_sender);
 
         spawner.init();
@@ -302,6 +313,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             theme_action.set_checkable(true);
             theme_action.set_data(&QVariant::from_q_string(&theme.dir_name()));
 
+            if theme_setting.to_string().compare_q_string(&theme.dir_name())  == 0 {
+                theme_action.set_checked(true);
+            }
+
             theme_action_group.add_action_q_action(theme_action.as_ptr());
         }
 
@@ -329,7 +344,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 if action.object_name().to_std_string() == "set_theme".to_string() {
                     let mut _theme = THEME.lock().expect("Could not lock mutex");
 
-                    *_theme = action.data().to_string().to_std_string();
+                    let theme_name = action.data().to_string().to_std_string();
+
+                    *_theme = theme_name.clone();
+
+                    settings.set_value(&qs("theme"), &QVariant::from_q_string(&qs(theme_name)));
                 }
             }));
 
