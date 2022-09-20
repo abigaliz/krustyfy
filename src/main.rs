@@ -244,6 +244,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         if theme_setting.is_null() {
             theme_setting.set_value(&QVariant::from_q_string(&qs("default")));
+        } else {
+            let mut _theme = THEME.lock().expect("Could not lock mutex");
+            *_theme = theme_setting.to_string().to_std_string();
         }
 
         let spawner = NotificationSpawner::new(dbus_signal_sender);
