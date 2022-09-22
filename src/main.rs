@@ -6,9 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qt_core::q_dir::Filter;
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant, QSettings, QCoreApplication};
-use qt_gui::QIcon;
-use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup};
+use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant, QSettings, QCoreApplication, WindowType, WidgetAttribute};
+use qt_gui::{QIcon};
+use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup, QMainWindow, QFrame};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
@@ -239,8 +239,34 @@ async fn main() -> Result<(), Box<dyn Error>> {
         QCoreApplication::set_application_name(&qs(env!("CARGO_PKG_NAME")));
 
         let settings = QSettings::new();
-
         let theme_setting = settings.value_1a(&qs("theme"));
+
+        let main_window = QMainWindow::new_0a();
+
+        let desktop = QApplication::desktop();
+
+        let topleft = desktop
+                    .screen_geometry_int(-1)
+                    .top_left();
+ 
+        main_window.set_window_flags(
+            WindowType::WindowTransparentForInput
+                | WindowType::WindowStaysOnTopHint
+                | WindowType::FramelessWindowHint
+                | WindowType::BypassWindowManagerHint,
+        );
+
+        main_window.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+        main_window.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
+        main_window.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
+
+        let main_frame = QFrame::new_1a(main_window.as_ptr());
+
+        main_frame.set_geometry_4a(0, 0, 500, 1200);
+
+        main_window.set_geometry_4a(topleft.x(), 0, 500, 1200);
+
+        main_window.show();        
 
         if theme_setting.is_null() {
             theme_setting.set_value(&QVariant::from_q_string(&qs("default")));
@@ -249,7 +275,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             *_theme = theme_setting.to_string().to_std_string();
         }
 
-        let spawner = NotificationSpawner::new(dbus_signal_sender);
+        let spawner = NotificationSpawner::new(dbus_signal_sender, main_frame);
 
         spawner.init();
 

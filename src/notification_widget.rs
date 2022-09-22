@@ -14,15 +14,15 @@ pub mod notifications {
     };
     use qt_gui::{q_painter::RenderHint, QColor, QCursor, QPainter, QPainterPath, QPixmap};
     use qt_widgets::{
-        QApplication, QDialog, QFrame, QGraphicsBlurEffect, QGraphicsDropShadowEffect, QLabel,
-        QPushButton, QStackedLayout, QWidget,
+         QDialog, QFrame, QGraphicsBlurEffect, QGraphicsDropShadowEffect, QLabel,
+        QPushButton, QStackedLayout, QWidget, QGraphicsOpacityEffect,
     };
 
     use crate::THEME;
 
     #[derive(Debug)]
     pub struct NotificationWidget {
-        pub widget: QBox<QDialog>,
+        pub widget: QBox<QWidget>,
         // Animations
         entry_animation: QBox<QPropertyAnimation>,
         exit_animation: QBox<QPropertyAnimation>,
@@ -38,6 +38,7 @@ pub mod notifications {
         close_signal: Ref<SignalOfQString>,
         pub animate_entry_signal: QBox<SignalOfInt>,
         blur_effect: QBox<QGraphicsBlurEffect>,
+        opacity_effect: QBox<QGraphicsOpacityEffect>,
         action_button: QPtr<QPushButton>,
         pub notification_id: RefCell<u32>,
         pub overlay: QBox<QDialog>,
@@ -64,6 +65,7 @@ pub mod notifications {
 
     impl NotificationWidget {
         pub fn new(
+            main_window: &QBox<QFrame>,
             close_signal: &QBox<SignalOfQString>,
             action_signal: &QBox<SignalOfInt>,
             _notification_id: u32,
@@ -71,17 +73,13 @@ pub mod notifications {
         ) -> Rc<NotificationWidget> {
             unsafe {
                 // Set the notification widget
-                let widget = QDialog::new_0a();
+                let widget = QWidget::new_1a(main_window);
+
+
                 widget.set_object_name(&qs(&guid));
 
                 // Set flags
-                widget.set_window_flags(
-                    WindowType::WindowTransparentForInput
-                        | WindowType::WindowStaysOnTopHint
-                        | WindowType::Tool
-                        | WindowType::FramelessWindowHint
-                        | WindowType::BypassWindowManagerHint,
-                );
+                
 
                 widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
                 widget.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
@@ -111,8 +109,6 @@ pub mod notifications {
                     template.property(CStr::as_ptr(&CString::new("defaultBlur").unwrap()));
                 let hovered_blur =
                     template.property(CStr::as_ptr(&CString::new("hoveredBlur").unwrap()));
-                let default_monitor =
-                    template.property(CStr::as_ptr(&CString::new("defaultMonitor").unwrap()));
                 let end_blur = template.property(CStr::as_ptr(&CString::new("endBlur").unwrap()));
                 let notification_duration =
                     template.property(CStr::as_ptr(&CString::new("notificationDuration").unwrap()));
@@ -127,15 +123,12 @@ pub mod notifications {
                 let text_shadow_color =
                     template.property(CStr::as_ptr(&CString::new("textShadowColor").unwrap()));
 
-                let desktop = QApplication::desktop();
-
-                let topleft = desktop
-                    .screen_geometry_int(default_monitor.to_int_0a())
-                    .top_left();
+                
 
                 let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
 
                 widget.layout().add_widget(&notification);
+
 
                 let overlay_widget: QPtr<QWidget> = template.find_child("overlay").unwrap();
                 // Set the default action overlay
@@ -146,7 +139,7 @@ pub mod notifications {
                     WindowType::WindowStaysOnTopHint
                         | WindowType::Tool
                         | WindowType::FramelessWindowHint
-                        | WindowType::X11BypassWindowManagerHint,
+                        | WindowType::BypassWindowManagerHint,
                 );
 
                 overlay.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
@@ -164,11 +157,17 @@ pub mod notifications {
                 let blur_effect = QGraphicsBlurEffect::new_1a(&widget);
                 blur_effect.set_object_name(&qs("blur_effect"));
 
+                let opacity_effect = QGraphicsOpacityEffect::new_1a(&notification);
+                opacity_effect.set_object_name(&qs("opacity_effect"));
+
                 widget.set_graphics_effect(&blur_effect);
+                notification.set_graphics_effect(&opacity_effect);
+
+                opacity_effect.set_opacity(default_opacity.to_double_0a());
                 blur_effect.set_blur_radius(default_blur.to_double_0a());
 
                 widget.set_geometry_4a(
-                    topleft.x(),
+                    0,
                     0 - notification.geometry().height(),
                     notification.geometry().width(),
                     notification.geometry().height(),
@@ -184,11 +183,11 @@ pub mod notifications {
                 blur_radius_property.add_assign_q_string(&qs("blurRadius"));
 
                 let opacity_property = QByteArray::new();
-                opacity_property.add_assign_q_string(&qs("windowOpacity"));
+                opacity_property.add_assign_q_string(&qs("opacity"));
 
                 let entry_animation = QPropertyAnimation::new_2a(&widget, &y_property);
                 entry_animation.set_object_name(&qs("entry_animation"));
-                let exit_animation = QPropertyAnimation::new_2a(&widget, &opacity_property);
+                let exit_animation = QPropertyAnimation::new_2a(&opacity_effect, &opacity_property);
                 exit_animation.set_object_name(&qs("exit_animation"));
                 let blur_animation =
                     QPropertyAnimation::new_2a(&blur_effect, &blur_radius_property);
@@ -197,7 +196,7 @@ pub mod notifications {
                     QPropertyAnimation::new_2a(&blur_effect, &blur_radius_property);
                 blur_hover_animation.set_object_name(&qs("blur_hover_animation"));
                 let opacity_hover_animation =
-                    QPropertyAnimation::new_2a(&widget, &opacity_property);
+                    QPropertyAnimation::new_2a(&opacity_effect, &opacity_property);
                 opacity_hover_animation.set_object_name(&qs("opacity_hover_animation"));
                 let exit_animation_group = QSequentialAnimationGroup::new_1a(&widget);
                 exit_animation_group.set_object_name(&qs("exit_animation_group"));
@@ -305,6 +304,7 @@ pub mod notifications {
                     close_signal: close,
                     animate_entry_signal,
                     blur_effect,
+                    opacity_effect,
                     action_signal: action,
                     action_button,
                     notification_id,
@@ -471,9 +471,15 @@ pub mod notifications {
                 self.unfreeze();
             }
 
+            let rect = QRect::new();
+            rect.set_x(self.widget.x() + self.widget.window().x());
+            rect.set_y(self.widget.y() + self.widget.window().y());
+            rect.set_width(self.widget.geometry().width());
+            rect.set_height(self.widget.geometry().height());
+            
             let pos = QCursor::pos_0a();
 
-            if self.widget.geometry().contains_q_point(pos.as_ref()) {
+            if rect.contains_q_point(pos.as_ref()) {
                 self.hover();
             } else {
                 self.unhover();
@@ -484,10 +490,8 @@ pub mod notifications {
             if self.overlay.is_visible() {
                 self.blur_effect
                     .set_blur_radius(self.default_blur.to_double_0a());
-                self.widget.set_window_opacity(1.0);
+                self.opacity_effect.set_opacity(0.99); // For some reason setting it to 1.0 shifts the widget slightly to the bottom-right
                 self.frame_shadow.set_blur_radius(15.0);
-
-                self.frame_shadow.set_blur_radius(10.0);
 
                 let color = QColor::from_q_string(&self.focused_shadow_color.to_string());
 
@@ -509,8 +513,7 @@ pub mod notifications {
             if self.overlay.is_visible() {
                 self.blur_effect
                     .set_blur_radius(self.default_blur.to_double_0a());
-                self.widget
-                    .set_window_opacity(self.default_opacity.to_double_0a());
+                    self.opacity_effect.set_opacity(self.default_opacity.to_double_0a());
             } else if self.exit_animation.state() != q_abstract_animation::State::Running {
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped
                     && self.parallel_hover_animation.current_time() > 0
@@ -600,7 +603,7 @@ pub mod notifications {
             self.parallel_hover_animation.stop();
             self.exit_animation
                 .set_start_value(&qt_core::QVariant::from_double(
-                    self.widget.window_opacity(),
+                    self.opacity_effect.opacity(),
                 ));
             self.blur_animation
                 .set_start_value(&qt_core::QVariant::from_double(
@@ -609,7 +612,14 @@ pub mod notifications {
         }
 
         unsafe fn freeze(self: &Rc<Self>) {
-            self.overlay.set_geometry_1a(self.widget.geometry());
+
+            let rect = QRect::new();
+            rect.set_x(self.widget.x() + self.widget.window().x());
+            rect.set_y(self.widget.y() + self.widget.window().y());
+            rect.set_width(self.widget.geometry().width());
+            rect.set_height(self.widget.geometry().height());
+
+            self.overlay.set_geometry_1a(rect.as_ref());
             self.action_button.set_geometry_4a(
                 0,
                 0,
@@ -626,8 +636,7 @@ pub mod notifications {
             self.exit_animation_group.pause();
             self.blur_effect
                 .set_blur_radius(self.default_blur.to_double_0a());
-            self.widget
-                .set_window_opacity(self.default_opacity.to_double_0a());
+            self.opacity_effect.set_opacity(self.default_opacity.to_double_0a());
         }
 
         unsafe fn unfreeze(self: &Rc<Self>) {

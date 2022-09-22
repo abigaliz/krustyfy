@@ -6,6 +6,7 @@ use cpp_core::{Ptr, Ref, StaticUpcast};
 
 use linked_hash_map::LinkedHashMap;
 
+use qt_widgets::{QFrame};
 use tokio::sync::mpsc::UnboundedSender;
 
 use lazy_static::lazy_static;
@@ -37,6 +38,7 @@ pub struct NotificationSpawner {
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
     qobject: QBox<QObject>,
+    main_window: QBox<QFrame>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -46,7 +48,7 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(signal_sender: UnboundedSender<DbusSignal>) -> Rc<NotificationSpawner> {
+    pub fn new(signal_sender: UnboundedSender<DbusSignal>, main_window: QBox<QFrame>) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -74,6 +76,7 @@ impl NotificationSpawner {
                 action_signal,
                 close_signal,
                 qobject,
+                main_window
             })
         }
     }
@@ -166,6 +169,7 @@ impl NotificationSpawner {
             let guid = Uuid::new_v4().to_string();
 
             let _notification_widget = NotificationWidget::new(
+                &self.main_window,
                 &self.close_signal,
                 &self.action_signal,
                 notification_id,
