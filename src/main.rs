@@ -267,7 +267,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let main_frame = QFrame::new_1a(main_window.as_ptr());
 
-        main_frame.set_geometry_4a(0, 0, 202, 200);
+        main_frame.set_geometry_4a(0, 0, 500, 1200);
 
         main_frame.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
         main_frame.set_style_sheet(&qs("background-color: transparent;"));
