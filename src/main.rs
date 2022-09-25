@@ -6,9 +6,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use qt_core::q_dir::Filter;
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant, QSettings, QCoreApplication, WindowType, WidgetAttribute};
-use qt_gui::{QIcon};
-use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup, QMainWindow, QFrame};
+use qt_core::{
+    qs, ConnectionType, QCoreApplication, QDir, QDirIterator, QSettings, QString, QVariant,
+    SignalOfInt, SignalOfQString, WidgetAttribute, WindowType,
+};
+use qt_gui::QIcon;
+use qt_widgets::{
+    QActionGroup, QApplication, QFrame, QMainWindow, QMenu, QSystemTrayIcon, SlotOfQAction,
+};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
@@ -182,7 +187,7 @@ impl NotificationHandler {
 }
 
 lazy_static! {
-    pub static ref THEME : Mutex<String> = Mutex::new("default".to_string());
+    pub static ref THEME: Mutex<String> = Mutex::new("default".to_string());
 }
 
 #[tokio::main]
@@ -245,28 +250,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let desktop = QApplication::desktop();
 
-        let topleft = desktop
-                    .screen_geometry_int(-1)
-                    .top_left();
- 
+        let topleft = desktop.screen_geometry_int(-1).top_left();
+
         main_window.set_window_flags(
             WindowType::WindowTransparentForInput
                 | WindowType::WindowStaysOnTopHint
                 | WindowType::FramelessWindowHint
-                | WindowType::BypassWindowManagerHint,
+                | WindowType::BypassWindowManagerHint
+                | WindowType::X11BypassWindowManagerHint,
         );
 
         main_window.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
         main_window.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
         main_window.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
+        main_window.set_style_sheet(&qs("background-color: transparent;"));
 
         let main_frame = QFrame::new_1a(main_window.as_ptr());
 
-        main_frame.set_geometry_4a(0, 0, 500, 1200);
+        main_frame.set_geometry_4a(0, 0, 202, 200);
+
+        main_frame.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+        main_frame.set_style_sheet(&qs("background-color: transparent;"));
 
         main_window.set_geometry_4a(topleft.x(), 0, 500, 1200);
 
-        main_window.show();        
+        main_window.show();
 
         if theme_setting.is_null() {
             theme_setting.set_value(&QVariant::from_q_string(&qs("default")));
@@ -331,7 +339,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let theme_action_group = QActionGroup::new(&theme_menu);
         theme_action_group.set_exclusive(true);
 
-        let theme_directories = QDirIterator::from_q_string_q_flags_filter(&qs("./res/themes"), Filter::AllDirs | Filter::NoDotAndDotDot);
+        let theme_directories = QDirIterator::from_q_string_q_flags_filter(
+            &qs("./res/themes"),
+            Filter::AllDirs | Filter::NoDotAndDotDot,
+        );
 
         while theme_directories.has_next() {
             let theme = QDir::new_1a(&theme_directories.next());
@@ -342,7 +353,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             theme_action.set_checkable(true);
             theme_action.set_data(&QVariant::from_q_string(&theme.dir_name()));
 
-            if theme_setting.to_string().compare_q_string(&theme.dir_name())  == 0 {
+            if theme_setting
+                .to_string()
+                .compare_q_string(&theme.dir_name())
+                == 0
+            {
                 theme_action.set_checked(true);
             }
 
