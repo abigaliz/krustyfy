@@ -5,12 +5,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use lazy_static::lazy_static;
 use qt_core::q_dir::Filter;
 use qt_core::{
     qs, ConnectionType, QCoreApplication, QDir, QDirIterator, QSettings, QString, QVariant,
     SignalOfInt, SignalOfQString, WidgetAttribute, WindowType,
 };
-use qt_gui::QIcon;
+use qt_gui::{QGuiApplication, QIcon};
 use qt_widgets::{
     QActionGroup, QApplication, QFrame, QMainWindow, QMenu, QSystemTrayIcon, SlotOfQAction,
 };
@@ -22,11 +23,10 @@ use uuid::Uuid;
 use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
-use crate::dbus_signal::{DbusMethod, DbusSignal};
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
 
-use lazy_static::lazy_static;
+use crate::dbus_signal::{DbusMethod, DbusSignal};
 
 mod dbus_signal;
 mod image_handler;
@@ -73,10 +73,23 @@ impl NotificationHandler {
             String::new()
         };
 
-        let image_data = if hints.contains_key("image-data") {
-            let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"])
-                .ok()
-                .unwrap();
+        let image_data_property_name = if hints.contains_key("image-data") {
+            Some("image-data")
+        } else if hints.contains_key("image_data") {
+            Some("image_data")
+        } else if hints.contains_key("icon-data") {
+            Some("icon-data")
+        } else if hints.contains_key("icon-data") {
+            Some("icon_data")
+        } else {
+            None
+        };
+
+        let image_data = if image_data_property_name.is_some() {
+            let image_structure =
+                zbus::zvariant::Structure::try_from(&hints[image_data_property_name.unwrap()])
+                    .ok()
+                    .unwrap();
 
             let fields = image_structure.fields();
             let width_value = &fields[0];
@@ -188,6 +201,7 @@ impl NotificationHandler {
 
 lazy_static! {
     pub static ref THEME: Mutex<String> = Mutex::new("default".to_string());
+    pub static ref SCREEN: Mutex<i32> = Mutex::new(-1);
 }
 
 #[tokio::main]
@@ -245,12 +259,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         let settings = QSettings::new();
         let theme_setting = settings.value_1a(&qs("theme"));
+        let screen_setting = settings.value_1a(&qs("screen"));
 
         let main_window = QMainWindow::new_0a();
 
         let desktop = QApplication::desktop();
 
-        let topleft = desktop.screen_geometry_int(-1).top_left();
+        let screens = QGuiApplication::screens();
+
+        let topleft = if screen_setting.is_null() {
+            desktop.screen_geometry_int(-1).top_left()
+        } else {
+            let desired_screen = screen_setting.to_string();
+
+            let mut screen_number: i32 = -1;
+            for i in 0..screens.length() {
+                if screens
+                    .value_1a(i)
+                    .name()
+                    .compare_q_string(desired_screen.as_ref())
+                    == 0
+                {
+                    screen_number = i;
+                    break;
+                }
+            }
+            desktop.screen_geometry_int(screen_number).top_left()
+        };
 
         main_window.set_window_flags(
             WindowType::WindowTransparentForInput
@@ -364,6 +399,31 @@ async fn main() -> Result<(), Box<dyn Error>> {
             theme_action_group.add_action_q_action(theme_action.as_ptr());
         }
 
+        let screens_menu = tray_menu.add_menu_q_string(&qs("Screen"));
+
+        let screens_action_group = QActionGroup::new(&screens_menu);
+        screens_action_group.set_exclusive(true);
+
+        for i in 0..screens.length() {
+            let screen = screens.value_1a(i);
+
+            let screen_action = screens_menu.add_action_q_string(&screen.name());
+
+            screen_action.set_object_name(&qs("set_screen"));
+            screen_action.set_checkable(true);
+            screen_action.set_data(&QVariant::from_int(i));
+
+            if screen_setting.to_string().compare_q_string(&screen.name()) == 0 {
+                screen_action.set_checked(true);
+            }
+
+            screens_action_group.add_action_q_action(screen_action.as_ptr());
+        }
+
+        if screens_action_group.checked_action().is_null() {
+            screens_action_group.actions().value_1a(0).set_checked(true);
+        }
+
         let do_not_disturb_action = tray_menu.add_action_q_string(&qs("Do not disturb"));
         do_not_disturb_action.set_object_name(&qs("do_not_disturb_action"));
         do_not_disturb_action.set_checkable(true);
@@ -393,6 +453,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     *_theme = theme_name.clone();
 
                     settings.set_value(&qs("theme"), &QVariant::from_q_string(&qs(theme_name)));
+                }
+
+                if action.object_name().to_std_string() == "set_screen".to_string() {
+                    let mut _screen = SCREEN.lock().expect("Could not lock mutex");
+
+                    let screen_id = action.data().to_int_0a();
+
+                    *_screen = screen_id.clone();
+
+                    let screen = QGuiApplication::screens().value_1a(screen_id);
+
+                    main_window.set_geometry_4a(screen.geometry().x(), 0, 500, 1200);
+
+                    settings.set_value(
+                        &qs("screen"),
+                        &QVariant::from_q_string(action.text().as_ref()),
+                    );
                 }
             }));
 
