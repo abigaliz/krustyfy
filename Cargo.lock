@@ -421,7 +421,7 @@ dependencies = [
 
 [[package]]
 name = "krustyfy"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "copy_to_output",
  "cpp_core",

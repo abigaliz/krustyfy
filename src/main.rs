@@ -1,33 +1,39 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::error::Error;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use qt_core::q_dir::Filter;
-use qt_core::{qs, ConnectionType, QString, SignalOfInt, SignalOfQString, QDirIterator, QDir, QVariant, QSettings, QCoreApplication};
-use qt_gui::QIcon;
-use qt_widgets::{QApplication, QMenu, QSystemTrayIcon, SlotOfQAction, QActionGroup};
+use qt_core::{
+    ConnectionType, QCoreApplication, qs, QString,
+    SignalOfInt, SignalOfQString, WidgetAttribute, WindowType,
+};
+use qt_widgets::{
+    QApplication, QFrame, QMainWindow,
+};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
 };
 use uuid::Uuid;
-use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
+use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
 use zvariant::Value;
 
-use crate::dbus_signal::{DbusMethod, DbusSignal};
 use notification::{ImageData, Notification};
 use notification_spawner::NotificationSpawner;
 
-use lazy_static::lazy_static;
+use crate::dbus_signal::{DbusMethod, DbusSignal};
+use crate::settings::{load_settings, SETTINGS};
+use crate::tray_menu::generate_tray;
 
 mod dbus_signal;
 mod image_handler;
 mod notification;
 mod notification_spawner;
 mod notification_widget;
+mod settings;
+mod tray_menu;
 
 //static
 struct NotificationHandler {
@@ -68,10 +74,23 @@ impl NotificationHandler {
             String::new()
         };
 
-        let image_data = if hints.contains_key("image-data") {
-            let image_structure = zbus::zvariant::Structure::try_from(&hints["image-data"])
-                .ok()
-                .unwrap();
+        let image_data_property_name = if hints.contains_key("image-data") {
+            Some("image-data")
+        } else if hints.contains_key("image_data") {
+            Some("image_data")
+        } else if hints.contains_key("icon-data") {
+            Some("icon-data")
+        } else if hints.contains_key("icon-data") {
+            Some("icon_data")
+        } else {
+            None
+        };
+
+        let image_data = if image_data_property_name.is_some() {
+            let image_structure =
+                zbus::zvariant::Structure::try_from(&hints[image_data_property_name.unwrap()])
+                    .ok()
+                    .unwrap();
 
             let fields = image_structure.fields();
             let width_value = &fields[0];
@@ -181,10 +200,6 @@ impl NotificationHandler {
     }
 }
 
-lazy_static! {
-    pub static ref THEME : Mutex<String> = Mutex::new("default".to_string());
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let (dbus_method_sender, mut dbus_method_receiver) = mpsc::channel(5);
@@ -238,18 +253,39 @@ async fn main() -> Result<(), Box<dyn Error>> {
         QCoreApplication::set_organization_name(&qs(env!("CARGO_PKG_NAME")));
         QCoreApplication::set_application_name(&qs(env!("CARGO_PKG_NAME")));
 
-        let settings = QSettings::new();
+        load_settings();
 
-        let theme_setting = settings.value_1a(&qs("theme"));
+        let main_window = QMainWindow::new_0a();
 
-        if theme_setting.is_null() {
-            theme_setting.set_value(&QVariant::from_q_string(&qs("default")));
-        } else {
-            let mut _theme = THEME.lock().expect("Could not lock mutex");
-            *_theme = theme_setting.to_string().to_std_string();
-        }
+        let desktop = QApplication::desktop();
 
-        let spawner = NotificationSpawner::new(dbus_signal_sender);
+        let topleft = desktop
+            .screen_geometry_int(SETTINGS.screen.id.clone())
+            .top_left();
+
+        main_window.set_window_flags(
+            WindowType::WindowTransparentForInput
+                | WindowType::WindowStaysOnTopHint
+                | WindowType::FramelessWindowHint
+                | WindowType::BypassWindowManagerHint
+                | WindowType::X11BypassWindowManagerHint,
+        );
+
+        main_window.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+        main_window.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
+        main_window.set_attribute_1a(WidgetAttribute::WANoSystemBackground);
+        main_window.set_style_sheet(&qs("background-color: transparent;"));
+
+        let main_frame = QFrame::new_1a(main_window.as_ptr());
+
+        main_frame.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
+        main_frame.set_style_sheet(&qs("background-color: transparent;"));
+
+        main_window.set_geometry_4a(topleft.x(), 0, 0, 0);
+
+        main_window.show();
+
+        let spawner = NotificationSpawner::new(dbus_signal_sender, main_frame);
 
         spawner.init();
 
@@ -292,68 +328,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         });
 
-        let tray_icon = QSystemTrayIcon::new();
-
-        tray_icon.set_icon(&QIcon::from_theme_1a(&qs("notifications")));
-
-        tray_icon.show();
-
-        let tray_menu = QMenu::new();
-
-        let theme_menu = tray_menu.add_menu_q_string(&qs("Themes"));
-
-        let theme_action_group = QActionGroup::new(&theme_menu);
-        theme_action_group.set_exclusive(true);
-
-        let theme_directories = QDirIterator::from_q_string_q_flags_filter(&qs("./res/themes"), Filter::AllDirs | Filter::NoDotAndDotDot);
-
-        while theme_directories.has_next() {
-            let theme = QDir::new_1a(&theme_directories.next());
-
-            let theme_action = theme_menu.add_action_q_string(&theme.dir_name());
-
-            theme_action.set_object_name(&qs("set_theme"));
-            theme_action.set_checkable(true);
-            theme_action.set_data(&QVariant::from_q_string(&theme.dir_name()));
-
-            if theme_setting.to_string().compare_q_string(&theme.dir_name())  == 0 {
-                theme_action.set_checked(true);
-            }
-
-            theme_action_group.add_action_q_action(theme_action.as_ptr());
-        }
-
-        let do_not_disturb_action = tray_menu.add_action_q_string(&qs("Do not disturb"));
-        do_not_disturb_action.set_object_name(&qs("do_not_disturb_action"));
-        do_not_disturb_action.set_checkable(true);
-
-        let quit_action = tray_menu.add_action_q_string(&qs("Quit"));
-        quit_action.set_object_name(&qs("quit_action"));
-
-        tray_icon.set_context_menu(&tray_menu);
-
-        tray_menu
-            .triggered()
-            .connect(&SlotOfQAction::new(&tray_menu, move |action| {
-                if action.object_name().to_std_string() == "quit_action".to_string() {
-                    QApplication::close_all_windows();
-                    tray_icon.hide();
-                }
-
-                if action.object_name().to_std_string() == "do_not_disturb_action".to_string() {
-                    do_not_disturb.store(do_not_disturb_action.is_checked(), Ordering::Relaxed);
-                }
-
-                if action.object_name().to_std_string() == "set_theme".to_string() {
-                    let mut _theme = THEME.lock().expect("Could not lock mutex");
-
-                    let theme_name = action.data().to_string().to_std_string();
-
-                    *_theme = theme_name.clone();
-
-                    settings.set_value(&qs("theme"), &QVariant::from_q_string(&qs(theme_name)));
-                }
-            }));
+        let _tray_icon = generate_tray();
 
         QApplication::exec()
     })

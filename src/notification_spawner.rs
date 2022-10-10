@@ -6,6 +6,7 @@ use cpp_core::{Ptr, Ref, StaticUpcast};
 
 use linked_hash_map::LinkedHashMap;
 
+use qt_widgets::QFrame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use lazy_static::lazy_static;
@@ -37,6 +38,7 @@ pub struct NotificationSpawner {
     action_signal: QBox<SignalOfInt>,
     close_signal: QBox<SignalOfQString>,
     qobject: QBox<QObject>,
+    main_window: QBox<QFrame>,
 }
 
 impl StaticUpcast<QObject> for NotificationSpawner {
@@ -46,7 +48,10 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(signal_sender: UnboundedSender<DbusSignal>) -> Rc<NotificationSpawner> {
+    pub fn new(
+        signal_sender: UnboundedSender<DbusSignal>,
+        main_window: QBox<QFrame>,
+    ) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -74,6 +79,7 @@ impl NotificationSpawner {
                 action_signal,
                 close_signal,
                 qobject,
+                main_window,
             })
         }
     }
@@ -166,6 +172,7 @@ impl NotificationSpawner {
             let guid = Uuid::new_v4().to_string();
 
             let _notification_widget = NotificationWidget::new(
+                &self.main_window,
                 &self.close_signal,
                 &self.action_signal,
                 notification_id,
@@ -249,10 +256,34 @@ impl NotificationSpawner {
         let list = self.widget_list.lock().unwrap();
 
         let mut height_accumulator = 0;
+        let mut biggest_width = 0;
+        let mut end_height = 0;
+
         for widget in list.values() {
             widget.animate_entry_signal.emit(height_accumulator);
             height_accumulator += widget.widget.height();
+            biggest_width = if biggest_width < widget.widget.width() {
+                widget.widget.width()
+            } else {
+                biggest_width
+            };
+
+            end_height = if height_accumulator < widget.widget.geometry().bottom() {
+                widget.widget.geometry().bottom()
+            } else {
+                height_accumulator
+            }
         }
+
+        self.main_window
+            .set_geometry_4a(0, 0, biggest_width, end_height);
+        let window_geometry = self.main_window.window().geometry();
+        self.main_window.window().set_geometry_4a(
+            window_geometry.x(),
+            window_geometry.y(),
+            biggest_width,
+            end_height,
+        );
     }
 
     #[slot(SlotOfInt)]
