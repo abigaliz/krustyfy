@@ -1,23 +1,19 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::error::Error;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use qt_core::{
-    ConnectionType, QCoreApplication, qs, QString,
-    SignalOfInt, SignalOfQString, WidgetAttribute, WindowType,
+    qs, ConnectionType, QCoreApplication, QString, SignalOfInt, SignalOfQString, WidgetAttribute,
+    WindowType,
 };
-use qt_widgets::{
-    QApplication, QFrame, QMainWindow,
-};
+use qt_widgets::{QApplication, QFrame, QMainWindow};
 use tokio::{
     self,
     sync::mpsc::{self, Sender},
 };
 use uuid::Uuid;
-use zbus::{ConnectionBuilder, dbus_interface, zvariant::Array};
+use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
 use notification::{ImageData, Notification};
@@ -289,8 +285,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
         spawner.init();
 
-        let do_not_disturb = Arc::new(AtomicBool::new(false));
-
         let notitification_signal = SignalOfQString::new();
         notitification_signal.connect_with_type(
             ConnectionType::QueuedConnection,
@@ -303,7 +297,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             &spawner.slot_on_external_close(),
         );
 
-        let do_not_disturb_clone = do_not_disturb.clone();
         let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
         let ref_closed_notification_signal = closed_notification_signal.as_raw_ref().unwrap();
 
@@ -317,7 +310,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         });
                     }
                     DbusMethod::Notify { notification } => {
-                        if !do_not_disturb_clone.load(Ordering::Relaxed) {
+                        if !SETTINGS.do_not_disturb.value {
                             let guid = Uuid::new_v4().to_string();
                             let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
                             list.insert(guid.clone(), notification);
