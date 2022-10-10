@@ -6,7 +6,7 @@ use cpp_core::{Ptr, Ref, StaticUpcast};
 
 use linked_hash_map::LinkedHashMap;
 
-use qt_widgets::{QFrame};
+use qt_widgets::QFrame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use lazy_static::lazy_static;
@@ -48,7 +48,10 @@ impl StaticUpcast<QObject> for NotificationSpawner {
 }
 
 impl NotificationSpawner {
-    pub fn new(signal_sender: UnboundedSender<DbusSignal>, main_window: QBox<QFrame>) -> Rc<NotificationSpawner> {
+    pub fn new(
+        signal_sender: UnboundedSender<DbusSignal>,
+        main_window: QBox<QFrame>,
+    ) -> Rc<NotificationSpawner> {
         unsafe {
             let widget_list = Mutex::new(LinkedHashMap::new());
 
@@ -76,7 +79,7 @@ impl NotificationSpawner {
                 action_signal,
                 close_signal,
                 qobject,
-                main_window
+                main_window,
             })
         }
     }
@@ -253,10 +256,34 @@ impl NotificationSpawner {
         let list = self.widget_list.lock().unwrap();
 
         let mut height_accumulator = 0;
+        let mut biggest_width = 0;
+        let mut end_height = 0;
+
         for widget in list.values() {
             widget.animate_entry_signal.emit(height_accumulator);
             height_accumulator += widget.widget.height();
+            biggest_width = if biggest_width < widget.widget.width() {
+                widget.widget.width()
+            } else {
+                biggest_width
+            };
+
+            end_height = if height_accumulator < widget.widget.geometry().bottom() {
+                widget.widget.geometry().bottom()
+            } else {
+                height_accumulator
+            }
         }
+
+        self.main_window
+            .set_geometry_4a(0, 0, biggest_width, end_height);
+        let window_geometry = self.main_window.window().geometry();
+        self.main_window.window().set_geometry_4a(
+            window_geometry.x(),
+            window_geometry.y(),
+            biggest_width,
+            end_height,
+        );
     }
 
     #[slot(SlotOfInt)]

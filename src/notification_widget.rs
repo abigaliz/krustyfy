@@ -5,6 +5,7 @@ pub mod notifications {
     use cpp_core::{CppBox, CppDeletable, Ptr, Ref, StaticUpcast};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
+    use crate::settings::SETTINGS;
     use qt_core::{
         q_abstract_animation, q_io_device::OpenModeFlag, qs, slot, AspectRatioMode, ConnectionType,
         GlobalColor, QBox, QByteArray, QEasingCurve, QFile, QFlags, QObject,
@@ -14,11 +15,9 @@ pub mod notifications {
     };
     use qt_gui::{q_painter::RenderHint, QColor, QCursor, QPainter, QPainterPath, QPixmap};
     use qt_widgets::{
-         QDialog, QFrame, QGraphicsBlurEffect, QGraphicsDropShadowEffect, QLabel,
-        QPushButton, QStackedLayout, QWidget, QGraphicsOpacityEffect,
+        QDialog, QFrame, QGraphicsBlurEffect, QGraphicsDropShadowEffect, QGraphicsOpacityEffect,
+        QLabel, QPushButton, QStackedLayout, QWidget,
     };
-
-    use crate::THEME;
 
     #[derive(Debug)]
     pub struct NotificationWidget {
@@ -75,11 +74,9 @@ pub mod notifications {
                 // Set the notification widget
                 let widget = QWidget::new_1a(main_window);
 
-
                 widget.set_object_name(&qs(&guid));
 
                 // Set flags
-                
 
                 widget.set_attribute_1a(WidgetAttribute::WATranslucentBackground);
                 widget.set_attribute_1a(WidgetAttribute::WADeleteOnClose);
@@ -89,9 +86,10 @@ pub mod notifications {
 
                 widget.set_layout(widget_layout.as_ptr());
 
-                let theme = THEME.lock().expect("Couldn't lock theme file");
+                let theme = &SETTINGS.theme.name;
 
-                let template_file = QFile::from_q_string(&qs(format!("./res/themes/{theme}/template.ui")));
+                let template_file =
+                    QFile::from_q_string(&qs(format!("./res/themes/{theme}/template.ui")));
                 template_file.open(QFlags::from(OpenModeFlag::ReadOnly));
                 let loader = qt_ui_tools::QUiLoader::new_1a(&widget);
                 let template = loader.load_1a(template_file.as_ptr());
@@ -123,12 +121,9 @@ pub mod notifications {
                 let text_shadow_color =
                     template.property(CStr::as_ptr(&CString::new("textShadowColor").unwrap()));
 
-                
-
                 let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
 
                 widget.layout().add_widget(&notification);
-
 
                 let overlay_widget: QPtr<QWidget> = template.find_child("overlay").unwrap();
                 // Set the default action overlay
@@ -227,8 +222,10 @@ pub mod notifications {
                 frame.set_graphics_effect(&frame_shadow);
 
                 // Set up content
-                let icon_label: QPtr<QLabel> = widget.find_child("iconLabel").unwrap_or(QPtr::null());
-                let app_name_label: QPtr<QLabel> = widget.find_child("appNameLabel").unwrap_or(QPtr::null());
+                let icon_label: QPtr<QLabel> =
+                    widget.find_child("iconLabel").unwrap_or(QPtr::null());
+                let app_name_label: QPtr<QLabel> =
+                    widget.find_child("appNameLabel").unwrap_or(QPtr::null());
 
                 if !app_name_label.is_null() {
                     let app_name_label_shadow = QGraphicsDropShadowEffect::new_1a(&app_name_label);
@@ -237,14 +234,17 @@ pub mod notifications {
                     app_name_label_shadow.set_blur_radius(1.0);
                     app_name_label_shadow.set_x_offset(0.0);
                     app_name_label_shadow.set_y_offset(0.0);
-                    app_name_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                    app_name_label_shadow
+                        .set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                     app_name_label.set_graphics_effect(&app_name_label_shadow);
                 }
 
-                let image_label: QPtr<QLabel> = widget.find_child("imageLabel").unwrap_or(QPtr::null());
+                let image_label: QPtr<QLabel> =
+                    widget.find_child("imageLabel").unwrap_or(QPtr::null());
 
-                let title_label: QPtr<QLabel> = widget.find_child("titleLabel").unwrap_or(QPtr::null());
+                let title_label: QPtr<QLabel> =
+                    widget.find_child("titleLabel").unwrap_or(QPtr::null());
 
                 if !title_label.is_null() {
                     let title_label_shadow = QGraphicsDropShadowEffect::new_1a(&title_label);
@@ -254,13 +254,14 @@ pub mod notifications {
                     title_label_shadow.set_blur_radius(1.0);
                     title_label_shadow.set_x_offset(0.0);
                     title_label_shadow.set_y_offset(0.0);
-                    title_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                    title_label_shadow
+                        .set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                     title_label.set_graphics_effect(&title_label_shadow);
                 }
-                
 
-                let body_label: QPtr<QLabel> = widget.find_child("bodyLabel").unwrap_or(QPtr::null());
+                let body_label: QPtr<QLabel> =
+                    widget.find_child("bodyLabel").unwrap_or(QPtr::null());
 
                 if !body_label.is_null() {
                     let body_label_shadow = QGraphicsDropShadowEffect::new_1a(&body_label);
@@ -269,11 +270,11 @@ pub mod notifications {
                     body_label_shadow.set_blur_radius(1.0);
                     body_label_shadow.set_x_offset(0.0);
                     body_label_shadow.set_y_offset(0.0);
-                    body_label_shadow.set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
+                    body_label_shadow
+                        .set_color(&QColor::from_q_string(&text_shadow_color.to_string()));
 
                     body_label.set_graphics_effect(&body_label_shadow);
                 }
-                
 
                 let animate_entry_signal = SignalOfInt::new();
 
@@ -336,7 +337,7 @@ pub mod notifications {
                     TextElideMode::ElideRight,
                     self.title_label.width(),
                 );
-                
+
                 self.title_label.set_text(&ellided_title);
             }
         }
@@ -348,7 +349,7 @@ pub mod notifications {
             body: CppBox<QString>,
             icon: CppBox<QPixmap>,
         ) {
-            if !self.app_name_label.is_null() { 
+            if !self.app_name_label.is_null() {
                 self.app_name_label.set_text(&app_name);
             }
 
@@ -367,10 +368,9 @@ pub mod notifications {
                     AspectRatioMode::IgnoreAspectRatio,
                     TransformationMode::SmoothTransformation,
                 );
-    
+
                 self.icon_label.set_pixmap(&scaled_icon);
             }
-            
 
             let signal = SignalNoArgs::new();
             signal.connect_with_type(ConnectionType::QueuedConnection, &self.slot_ellide());
@@ -399,7 +399,7 @@ pub mod notifications {
                 let scaled_image = self.resize_image(image);
 
                 self.image_label.set_pixmap(&scaled_image);
-    
+
                 self.image_label.set_maximum_size_2a(
                     self.image_label.maximum_height(),
                     self.image_label.maximum_height(),
@@ -408,7 +408,7 @@ pub mod notifications {
                     self.image_label.maximum_height(),
                     self.image_label.maximum_height(),
                 );
-            }            
+            }
 
             self.set_content(app_name, title, body, icon);
         }
@@ -476,7 +476,7 @@ pub mod notifications {
             rect.set_y(self.widget.y() + self.widget.window().y());
             rect.set_width(self.widget.geometry().width());
             rect.set_height(self.widget.geometry().height());
-            
+
             let pos = QCursor::pos_0a();
 
             if rect.contains_q_point(pos.as_ref()) {
@@ -513,7 +513,8 @@ pub mod notifications {
             if self.overlay.is_visible() {
                 self.blur_effect
                     .set_blur_radius(self.default_blur.to_double_0a());
-                    self.opacity_effect.set_opacity(self.default_opacity.to_double_0a());
+                self.opacity_effect
+                    .set_opacity(self.default_opacity.to_double_0a());
             } else if self.exit_animation.state() != q_abstract_animation::State::Running {
                 if self.parallel_hover_animation.state() == q_abstract_animation::State::Stopped
                     && self.parallel_hover_animation.current_time() > 0
@@ -612,7 +613,6 @@ pub mod notifications {
         }
 
         unsafe fn freeze(self: &Rc<Self>) {
-
             let rect = QRect::new();
             rect.set_x(self.widget.x() + self.widget.window().x());
             rect.set_y(self.widget.y() + self.widget.window().y());
@@ -636,7 +636,8 @@ pub mod notifications {
             self.exit_animation_group.pause();
             self.blur_effect
                 .set_blur_radius(self.default_blur.to_double_0a());
-            self.opacity_effect.set_opacity(self.default_opacity.to_double_0a());
+            self.opacity_effect
+                .set_opacity(self.default_opacity.to_double_0a());
         }
 
         unsafe fn unfreeze(self: &Rc<Self>) {
