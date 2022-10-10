@@ -38,6 +38,11 @@ pub fn get_available_screens() -> Vec<MenuItem> {
     unsafe {
         let screens = QGuiApplication::screens();
 
+        values.push(MenuItem {
+            label: qs("(Primary screen)"),
+            value: QVariant::from_int(-1),
+        });
+
         for i in 0..screens.length() {
             values.push(MenuItem {
                 label: screens.value_1a(i).name(),
@@ -137,7 +142,9 @@ pub unsafe fn generate_tray() -> (QBox<QSystemTrayIcon>, QBox<QMenu>) {
             }
 
             if action.object_name().to_std_string() == "set_screen".to_string() {
-                settings.screen.set(action.data());
+                settings
+                    .screen
+                    .set(QVariant::from_q_string(action.text().as_ref()));
                 settings.screen.save();
             }
         }));
