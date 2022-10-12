@@ -51,6 +51,32 @@ https://user-images.githubusercontent.com/112440538/190928912-c352c2ad-a002-4d9a
 ## How to contribute and help the project
 I don't know, I never thought I'd get this far. Also since I'm just learning about how to code in rust it's probably full of bad practices and awful code. :)
 
+## Building
+
+Tested with Debian 11 netinst + KDE
+
+### Requirements
+1. Install Rustup (https://rustup.rs/)
+2. Install required dev packages: `#apt-get install qt5-qmake qtbase5-dev cmake build-essential pkg-config qttools5-dev`
+
+### Clone and build
+1. Clone from git `$git clone https://github.com/abigaliz/krustyfy.git`
+2. `cd krustyfy`
+3. `cargo build --release`
+
+### Running it
+1. Disable KDE Notifications from the system tray by going to the System Tray Settings and marking Notifications as Disabled:
+![image](https://user-images.githubusercontent.com/112440538/195397565-2d15242f-be1e-40ba-b7f1-4b1b9e6c0457.png)
+2. Log out of the current session.
+3. Run krustyfy from `$HOME/krustyfy/target/release/krustyfy`
+
+You can also set it to run on startup from KDE System Settings:
+
+![image](https://user-images.githubusercontent.com/112440538/195398592-cc36fac4-95a0-4633-9b5b-22852101f138.png)
+
+Remember to set up the work path to `$HOME/krustyfy/target/release/`, otherwise it won't be able to access the notification templates folder.
+
+
 ## Usage
 
 By pressing **Left Alt key** you freeze all notifications (new notifications still come in, but start frozen) and you're able to click on them to interact.
