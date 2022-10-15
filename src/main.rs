@@ -3,6 +3,7 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::time::Duration;
 
+use errors::KrustifyError;
 use qt_core::{
     qs, ConnectionType, QCoreApplication, QString, SignalOfInt, SignalOfQString, WidgetAttribute,
     WindowType,
@@ -13,6 +14,7 @@ use tokio::{
     sync::mpsc::{self, Sender},
 };
 use uuid::Uuid;
+use zbus::fdo::Error as ZbusFdoError;
 use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
@@ -24,6 +26,7 @@ use crate::settings::{load_settings, SETTINGS};
 use crate::tray_menu::generate_tray;
 
 mod dbus_signal;
+mod errors;
 mod image_handler;
 mod notification;
 mod notification_spawner;
@@ -44,7 +47,7 @@ impl NotificationHandler {
         self.dbus_method_sender
             .send(DbusMethod::CloseNotification { notification_id })
             .await
-            .unwrap();
+            .map_err(|_| ZbusFdoError::Failed("failed to close notification".into()))?;
 
         Ok(())
     }
@@ -63,8 +66,7 @@ impl NotificationHandler {
     ) -> zbus::fdo::Result<u32> {
         let desktop_entry = if hints.contains_key("desktop-entry") {
             zbus::zvariant::Str::try_from(&hints["desktop-entry"])
-                .ok()
-                .unwrap()
+                .map_err(KrustifyError::from)?
                 .to_string()
         } else {
             String::new()
@@ -82,11 +84,11 @@ impl NotificationHandler {
             None
         };
 
-        let image_data = if image_data_property_name.is_some() {
+        let image_data = if let Some(name) = image_data_property_name {
             let image_structure =
-                zbus::zvariant::Structure::try_from(&hints[image_data_property_name.unwrap()])
-                    .ok()
-                    .unwrap();
+                zbus::zvariant::Structure::try_from(&hints[name]).map_err(|_| {
+                    ZbusFdoError::Failed("failed to build structure for image data".into())
+                })?;
 
             let fields = image_structure.fields();
             let width_value = &fields[0];
@@ -97,17 +99,27 @@ impl NotificationHandler {
             let channels_value = &fields[5];
             let data_value = &fields[6];
 
-            let image_raw_bytes_array = Array::try_from(data_value).ok().unwrap().get().to_vec();
+            let image_raw_bytes_array = Array::try_from(data_value)
+                .map_err(KrustifyError::from)?
+                .get()
+                .to_vec();
 
-            let width = i32::try_from(width_value).ok().unwrap();
-            let height = i32::try_from(height_value).ok().unwrap();
-            let rowstride = i32::try_from(rowstride_value).ok().unwrap();
-            let has_alpha = bool::try_from(has_alpha_value).ok().unwrap();
-            let bits_per_sample = i32::try_from(bits_per_sample_value).ok().unwrap();
-            let channels = i32::try_from(channels_value).ok().unwrap();
+            let width = i32::try_from(width_value).map_err(KrustifyError::from)?;
+            let height = i32::try_from(height_value).map_err(KrustifyError::from)?;
+            let rowstride = i32::try_from(rowstride_value).map_err(KrustifyError::from)?;
+            let has_alpha = bool::try_from(has_alpha_value).map_err(KrustifyError::from)?;
+            let bits_per_sample =
+                i32::try_from(bits_per_sample_value).map_err(KrustifyError::from)?;
+            let channels = i32::try_from(channels_value).map_err(KrustifyError::from)?;
+
+            // TODO: this one's tricky
             let data = image_raw_bytes_array
                 .iter()
-                .map(|value| u8::try_from(value).ok().unwrap())
+                .map(|value| {
+                    u8::try_from(value)
+                        .ok()
+                        .expect("value in image data was not a u8")
+                })
                 .collect::<Vec<_>>();
 
             Some(ImageData::new(
@@ -126,8 +138,7 @@ impl NotificationHandler {
         let image_path = if hints.contains_key("image-path") {
             Some(
                 zbus::zvariant::Str::try_from(&hints["image-path"])
-                    .ok()
-                    .unwrap()
+                    .map_err(KrustifyError::from)?
                     .to_string(),
             )
         } else {
@@ -158,7 +169,7 @@ impl NotificationHandler {
         self.dbus_method_sender
             .send(DbusMethod::Notify { notification })
             .await
-            .unwrap();
+            .map_err(KrustifyError::from)?;
 
         Ok(notification_id)
     }
@@ -224,7 +235,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             &(notification_id as u32, "default"),
                         )
                         .await
-                        .unwrap();
+                        .expect("could not emit ActionInvoked signal");
                 }
                 DbusSignal::NotificationClosed {
                     notification_id,
@@ -239,7 +250,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             &(notification_id, reason),
                         )
                         .await
-                        .unwrap();
+                        .expect("could not emit NotificationClosed signal");
                 }
             }
         }
@@ -297,8 +308,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             &spawner.slot_on_external_close(),
         );
 
-        let ref_notification_signal = notitification_signal.as_raw_ref().unwrap();
-        let ref_closed_notification_signal = closed_notification_signal.as_raw_ref().unwrap();
+        let ref_notification_signal = notitification_signal
+            .as_raw_ref()
+            .expect("could not get a reference to notification_signal");
+        let ref_closed_notification_signal = closed_notification_signal
+            .as_raw_ref()
+            .expect("could not get a reference to notification signal");
 
         tokio::spawn(async move {
             while let Some(method) = dbus_method_receiver.recv().await {
@@ -312,7 +327,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     DbusMethod::Notify { notification } => {
                         if !SETTINGS.do_not_disturb.value {
                             let guid = Uuid::new_v4().to_string();
-                            let mut list = notification_spawner::NOTIFICATION_LIST.lock().unwrap();
+                            let mut list = notification_spawner::NOTIFICATION_LIST
+                                .lock()
+                                .expect("could not acquire lock to notification list");
                             list.insert(guid.clone(), notification);
                             ref_notification_signal.emit(&QString::from_std_str(&guid));
                         }
