@@ -76,7 +76,7 @@ impl NotificationHandler {
             Some("image_data")
         } else if hints.contains_key("icon-data") {
             Some("icon-data")
-        } else if hints.contains_key("icon-data") {
+        } else if hints.contains_key("icon_data") {
             Some("icon_data")
         } else {
             None
