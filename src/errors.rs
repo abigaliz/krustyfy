@@ -9,7 +9,7 @@ use crate::dbus_signal::DbusMethod;
 pub enum KrustifyError {
     ZbusFdo(zbus::fdo::Error),
     Zvariant(zvariant::Error),
-    Send(tokio::sync::mpsc::error::SendError<DbusMethod>),
+    DbusMethodSend(tokio::sync::mpsc::error::SendError<DbusMethod>),
     Internal { message: String },
 }
 
@@ -33,7 +33,7 @@ impl From<zvariant::Error> for KrustifyError {
 
 impl From<tokio::sync::mpsc::error::SendError<DbusMethod>> for KrustifyError {
     fn from(err: tokio::sync::mpsc::error::SendError<DbusMethod>) -> Self {
-        KrustifyError::Send(err)
+        KrustifyError::DbusMethodSend(err)
     }
 }
 
@@ -43,7 +43,7 @@ impl From<KrustifyError> for zbus::fdo::Error {
             KrustifyError::ZbusFdo(e) => e,
             KrustifyError::Internal { message } => zbus::fdo::Error::Failed(message),
             KrustifyError::Zvariant(e) => zbus::fdo::Error::Failed(e.to_string()),
-            KrustifyError::Send(e) => zbus::fdo::Error::Failed(e.to_string()),
+            KrustifyError::DbusMethodSend(e) => zbus::fdo::Error::Failed(e.to_string()),
         }
     }
 }
