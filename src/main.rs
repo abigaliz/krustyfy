@@ -47,7 +47,7 @@ impl NotificationHandler {
         self.dbus_method_sender
             .send(DbusMethod::CloseNotification { notification_id })
             .await
-            .map_err(|_| ZbusFdoError::Failed("failed to close notification".into()))?;
+            .map_err(KrustifyError::from)?;
 
         Ok(())
     }
@@ -86,9 +86,7 @@ impl NotificationHandler {
 
         let image_data = if let Some(name) = image_data_property_name {
             let image_structure =
-                zbus::zvariant::Structure::try_from(&hints[name]).map_err(|_| {
-                    ZbusFdoError::Failed("failed to build structure for image data".into())
-                })?;
+                zbus::zvariant::Structure::try_from(&hints[name]).map_err(KrustifyError::from)?;
 
             let fields = image_structure.fields();
             let width_value = &fields[0];
