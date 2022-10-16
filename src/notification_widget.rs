@@ -5,6 +5,7 @@ pub mod notifications {
     use cpp_core::{CppBox, CppDeletable, Ptr, Ref, StaticUpcast};
     use device_query::{DeviceQuery, DeviceState, Keycode};
 
+    use crate::errors::KrustifyError;
     use crate::settings::SETTINGS;
     use qt_core::{
         q_abstract_animation, q_io_device::OpenModeFlag, qs, slot, AspectRatioMode, ConnectionType,
@@ -69,7 +70,7 @@ pub mod notifications {
             action_signal: &QBox<SignalOfInt>,
             _notification_id: u32,
             guid: String,
-        ) -> Rc<NotificationWidget> {
+        ) -> Result<Rc<NotificationWidget>, KrustifyError> {
             unsafe {
                 // Set the notification widget
                 let widget = QWidget::new_1a(main_window);
@@ -100,32 +101,30 @@ pub mod notifications {
 
                 // Load properties
                 let default_opacity =
-                    template.property(CStr::as_ptr(&CString::new("defaultOpacity").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("defaultOpacity")?));
                 let hovered_opacity =
-                    template.property(CStr::as_ptr(&CString::new("hoveredOpacity").unwrap()));
-                let default_blur =
-                    template.property(CStr::as_ptr(&CString::new("defaultBlur").unwrap()));
-                let hovered_blur =
-                    template.property(CStr::as_ptr(&CString::new("hoveredBlur").unwrap()));
-                let end_blur = template.property(CStr::as_ptr(&CString::new("endBlur").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("hoveredOpacity")?));
+                let default_blur = template.property(CStr::as_ptr(&CString::new("defaultBlur")?));
+                let hovered_blur = template.property(CStr::as_ptr(&CString::new("hoveredBlur")?));
+                let end_blur = template.property(CStr::as_ptr(&CString::new("endBlur")?));
                 let notification_duration =
-                    template.property(CStr::as_ptr(&CString::new("notificationDuration").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("notificationDuration")?));
                 let spawn_duration =
-                    template.property(CStr::as_ptr(&CString::new("spawnDuration").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("spawnDuration")?));
                 let disappear_duration =
-                    template.property(CStr::as_ptr(&CString::new("disappearDuration").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("disappearDuration")?));
                 let default_shadow_color =
-                    template.property(CStr::as_ptr(&CString::new("defaultShadowColor").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("defaultShadowColor")?));
                 let focused_shadow_color =
-                    template.property(CStr::as_ptr(&CString::new("focusedShadowColor").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("focusedShadowColor")?));
                 let text_shadow_color =
-                    template.property(CStr::as_ptr(&CString::new("textShadowColor").unwrap()));
+                    template.property(CStr::as_ptr(&CString::new("textShadowColor")?));
 
-                let notification: QPtr<QWidget> = template.find_child("notification").unwrap();
+                let notification: QPtr<QWidget> = template.find_child("notification")?;
 
                 widget.layout().add_widget(&notification);
 
-                let overlay_widget: QPtr<QWidget> = template.find_child("overlay").unwrap();
+                let overlay_widget: QPtr<QWidget> = template.find_child("overlay")?;
                 // Set the default action overlay
                 let overlay = QDialog::new_1a(&widget);
                 overlay.set_object_name(&qs("overlay"));
@@ -146,8 +145,7 @@ pub mod notifications {
                 overlay.set_layout(overlay_layout.as_ptr());
                 overlay_layout.add_widget(&overlay_widget);
 
-                let action_button: QPtr<QPushButton> =
-                    overlay_widget.find_child("pushButton").unwrap();
+                let action_button: QPtr<QPushButton> = overlay_widget.find_child("pushButton")?;
 
                 let blur_effect = QGraphicsBlurEffect::new_1a(&widget);
                 blur_effect.set_object_name(&qs("blur_effect"));
@@ -210,7 +208,7 @@ pub mod notifications {
                 parallel_hover_animation.add_animation(&blur_hover_animation);
                 parallel_hover_animation.add_animation(&opacity_hover_animation);
 
-                let frame: QPtr<QFrame> = widget.find_child("notificationFrame").unwrap();
+                let frame: QPtr<QFrame> = widget.find_child("notificationFrame")?;
 
                 let frame_shadow = QGraphicsDropShadowEffect::new_1a(&frame);
                 frame_shadow.set_object_name(&qs("frame_shadow"));
@@ -282,8 +280,13 @@ pub mod notifications {
                 overlay.show();
                 overlay.hide();
 
-                let close = close_signal.as_ref().unwrap();
-                let action = action_signal.as_ref().unwrap();
+                // not sure about these ones
+                let close = close_signal
+                    .as_ref()
+                    .expect("couldn't get reference to close signal");
+                let action = action_signal
+                    .as_ref()
+                    .expect("coudln't get reference to action signal");
 
                 let notification_id = RefCell::new(_notification_id);
 
@@ -325,7 +328,7 @@ pub mod notifications {
                 });
                 this.init();
                 this.animate_exit();
-                this
+                Ok(this)
             }
         }
 
