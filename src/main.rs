@@ -186,7 +186,7 @@ impl NotificationHandler {
 
     #[dbus_interface(name = "GetCapabilities")]
     fn get_capabilities(&mut self) -> zbus::fdo::Result<Vec<&str>> {
-        let capabilities = [
+        let capabilities = vec![
             "action-icons",
             "actions",
             "body",
@@ -197,8 +197,7 @@ impl NotificationHandler {
             "icon-static",
             "persistence",
             "sound",
-        ]
-        .to_vec();
+        ];
 
         Ok(capabilities)
     }
