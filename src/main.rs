@@ -14,7 +14,6 @@ use tokio::{
     sync::mpsc::{self, Sender},
 };
 use uuid::Uuid;
-use zbus::fdo::Error as ZbusFdoError;
 use zbus::{dbus_interface, zvariant::Array, ConnectionBuilder};
 use zvariant::Value;
 
