@@ -17,6 +17,7 @@ use qt_core::{
 };
 use uuid::Uuid;
 
+use crate::errors::KrustifyError;
 use crate::{
     dbus_signal::DbusSignal,
     image_handler,
@@ -101,14 +102,10 @@ impl NotificationSpawner {
 
     #[slot(SlotOfQString)]
     pub unsafe fn on_spawn_notification(self: &Rc<Self>, guid: Ref<QString>) {
-        let mut list = NOTIFICATION_LIST.lock().unwrap();
+        let mut list = NOTIFICATION_LIST.lock().expect("failed to aquire lock");
         let notification_option = list.remove(&guid.to_std_string());
 
-        if notification_option.is_none() {
-            return;
-        } else {
-            let notification = notification_option.unwrap();
-
+        if let Some(notification) = notification_option {
             self.spawn_notification(
                 notification.app_name,
                 notification.replaces_id,
@@ -121,7 +118,10 @@ impl NotificationSpawner {
                 notification.expire_timeout,
                 notification.notification_id,
                 notification.desktop_entry,
-            );
+            )
+            .expect("failed to spawn notification");
+        } else {
+            return;
         }
     }
 
@@ -162,13 +162,25 @@ impl NotificationSpawner {
         _expire_timeout: i32,
         notification_id: u32,
         desktop_entry: String,
-    ) {
-        let mut list = self.widget_list.lock().unwrap();
+    ) -> Result<(), KrustifyError> {
+        let mut list = self.widget_list.lock()?;
 
         let already_existing_notification =
             self.get_already_existing_notification(&list, &app_name, replaces_id);
 
-        if already_existing_notification.is_none() {
+        if let Some(notification_widget) = already_existing_notification {
+            notification_widget.reset_timer();
+
+            self.set_notification_contents(
+                app_name,
+                image_data,
+                image_path,
+                desktop_entry,
+                summary,
+                body,
+                notification_widget,
+            );
+        } else {
             let guid = Uuid::new_v4().to_string();
 
             let _notification_widget = NotificationWidget::new(
@@ -177,7 +189,7 @@ impl NotificationSpawner {
                 &self.action_signal,
                 notification_id,
                 guid.clone(),
-            );
+            )?;
 
             self.set_notification_contents(
                 app_name,
@@ -195,21 +207,9 @@ impl NotificationSpawner {
             list.insert(guid, _notification_widget);
 
             self.reorder();
-        } else {
-            let notification_widget = already_existing_notification.unwrap();
-
-            notification_widget.reset_timer();
-
-            self.set_notification_contents(
-                app_name,
-                image_data,
-                image_path,
-                desktop_entry,
-                summary,
-                body,
-                notification_widget,
-            );
         };
+
+        Ok(())
     }
 
     unsafe fn set_notification_contents(
@@ -232,9 +232,9 @@ impl NotificationSpawner {
             notification_widget.set_content_no_image(qs(app_name), qs(summary), qs(body), icon);
         } else {
             let pixmap = if image_data.is_some() {
-                image_handler::parse_image(image_data.unwrap())
+                image_handler::parse_image(image_data.expect("literally the imposible"))
             } else {
-                image_handler::load_image(image_path.unwrap())
+                image_handler::load_image(image_path.expect("damn, stupid cosmic rays"))
             };
 
             notification_widget.set_content_with_image(
@@ -253,7 +253,7 @@ impl NotificationSpawner {
 
     #[slot(SlotNoArgs)]
     unsafe fn on_reorder(self: &Rc<Self>) {
-        let list = self.widget_list.lock().unwrap();
+        let list = self.widget_list.lock().expect("failed to acquire locks");
 
         let mut height_accumulator = 0;
         let mut biggest_width = 0;
@@ -292,14 +292,16 @@ impl NotificationSpawner {
             .send(DbusSignal::ActionInvoked {
                 notification_id: notifcation_id,
             })
-            .unwrap();
+            .expect("failed to send signal");
     }
 
     #[slot(SlotOfQString)]
     unsafe fn on_widget_close(self: &Rc<Self>, closed_widget: Ref<QString>) {
-        let mut list = self.widget_list.lock().unwrap();
+        let mut list = self.widget_list.lock().expect("failed to acquire lock");
 
-        let widget = list.remove(&closed_widget.to_std_string()).unwrap();
+        let widget = list
+            .remove(&closed_widget.to_std_string())
+            .expect("failed to remove widget");
         widget.widget.close();
         widget.overlay.close();
 
@@ -308,14 +310,14 @@ impl NotificationSpawner {
                 notification_id: widget.notification_id.take(),
                 reason: widget.close_reason.take(),
             })
-            .unwrap();
+            .expect("failed to send signal");
 
         self.reorder();
     }
 
     #[slot(SlotOfInt)]
     pub unsafe fn on_external_close(self: &Rc<Self>, notification_id: i32) {
-        let list = self.widget_list.lock().unwrap();
+        let list = self.widget_list.lock().expect("failed to acquire lock");
 
         for widget in list.values() {
             let _notification_id = widget.notification_id.borrow().to_owned();
